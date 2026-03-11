@@ -1,88 +1,4 @@
 -- ==========================================
--- || SERVICES & REMOTES
--- ==========================================
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local LocalPlayer = Players.LocalPlayer
-
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-
-local TpRemote = Remotes:WaitForChild("TeleportToPortal")
-local RequestBossSummonRemote = Remotes:WaitForChild("RequestSummonBoss")
-local RequestSpawnStrongestRemote = Remotes:WaitForChild("RequestSpawnStrongestBoss")
-local RequestSpawnTrueAizenRemote = RemoteEvents:WaitForChild("RequestSpawnTrueAizen")
-local RequestSpawnRimuruRemote = RemoteEvents:WaitForChild("RequestSpawnRimuru")
-local RequestSpawnAnosRemote = Remotes:WaitForChild("RequestSpawnAnosBoss")
-
-local NPCsFolder = workspace:WaitForChild("NPCs")
-
--- ==========================================
--- || LOCATIONS & FARM ORDER
--- ==========================================
-local EntityLocations = {
-    --// Regular NPCs
-    ["Hollow"] = CFrame.new(-365, 0, 1094),
-    ["Quincy"] = CFrame.new(-1350, 1604, 1595),
-    ["Swordsman"] = CFrame.new(-1271, 1, -1193),
-    ["AcademyTeacher"] = CFrame.new(1081, 2, 1279),
-    ["Slime"] = CFrame.new(-1123, 14, 366),
-    ["StrongSorcerer"] = CFrame.new(664, 2, -1697),
-
-    --// Timed Bosses
-    ["Gojo"] = CFrame.new(1858.32, 12.98, 338.14),
-    ["Yuji"] = CFrame.new(1537.92, 9.98, 226.10),
-    ["Sukuna"] = CFrame.new(1571.26, 77.22, -34.11),
-    ["Jinwoo"] = CFrame.new(248.74, 12.09, 927.54),
-    ["Alucard"] = CFrame.new(248.74, 12.09, 927.54),
-    ["Aizen"] = CFrame.new(-567.22, -0.42, 1228.49),
-    ["Yamato"] = CFrame.new(-1422.68, 24.42, -1383.46),
-
-    --// Boss Summon
-    ["Saber"] = CFrame.new(770, -1, -1086),
-    ["Ichigo"] = CFrame.new(770, -1, -1086),
-    ["QinShi"] = CFrame.new(770, -1, -1086),
-    ["Gilgamesh"] = CFrame.new(770, -1, -1086),
-    ["BlessedMaiden"] = CFrame.new(770, -1, -1086),
-    ["StrongestinHistory"] = CFrame.new(604, 3, -2314),
-    ["StrongestofToday"] = CFrame.new(139, 3, -2432),
-    ["Rimuru"] = CFrame.new(-1358, 19, 219),
-    ["Anos"] = CFrame.new(949, 1, 1370),
-    ["TrueAizen"] = CFrame.new(-1205, 1604, 1774),
-}
-
-local FarmOrder = {
-    --// Regular NPCs
-    { Name = "Quincy", Remote = "SoulSociety", IsNPC = true },
-    { Name = "Slime", Remote = "Slime", IsNPC = true },
-    { Name = "AcademyTeacher", Remote = "Academy", IsNPC = true },
-    { Name = "Swordsman", Remote = "Judgement", IsNPC = true },
-    { Name = "Hollow", Remote = "HuecoMundo", IsNPC = true },
-    { Name = "StrongSorcerer", Remote = "Shinjuku", IsNPC = true },
-
-    --// Timed Bosses
-    { Name = "Gojo", Remote = "Shibuya", IsTimed = true },
-    { Name = "Yuji", Remote = "Shibuya", IsTimed = true },
-    { Name = "Sukuna", Remote = "Shibuya", IsTimed = true },
-    { Name = "Jinwoo", Remote = "Sailor", IsTimed = true },
-    { Name = "Alucard", Remote = "Sailor", IsTimed = true },
-    { Name = "Aizen", Remote = "HuecoMundo", IsTimed = true },
-    {Name = "Yamato", Remote = "Judgement", IsTimed = true},
-
-    --// Boss Summon
-    { Name = "Saber", Remote = "Boss", IsBoss = true },
-    { Name = "Ichigo", Remote = "Boss", IsBoss = true },
-    { Name = "QinShi", Remote = "Boss", IsBoss = true },
-    { Name = "Gilgamesh", Remote = "Boss", IsBoss = true },
-    { Name = "BlessedMaiden", Remote = "Boss", IsBoss = true },
-    { Name = "StrongestinHistory", Remote = "Shinjuku", IsBoss = true },
-    { Name = "StrongestofToday", Remote = "Shinjuku", IsBoss = true },
-    { Name = "Rimuru", Remote = "Slime", IsBoss = true },
-    { Name = "Anos", Remote = "Academy", IsBoss = true },
-    { Name = "TrueAizen", Remote = "SoulSociety", IsBoss = true },
-}
-
--- ==========================================
 -- || STATE MANAGEMENT (HIGH PERFORMANCE)
 -- ==========================================
 local ActiveNPCs = {}
@@ -154,7 +70,7 @@ end
 
 task.spawn(function()
     while task.wait(0.5) do
-        if getgenv().AutoSpawnBoss then
+        if _G.AutoSpawnBoss then
             local bossList = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" }
             local anyStandardAlive = false
             for _, bName in ipairs(bossList) do
@@ -164,31 +80,31 @@ task.spawn(function()
                 end
             end
             if not anyStandardAlive then
-                RequestBossSummonRemote:FireServer(getgenv().SelectedBoss .. "Boss", getgenv().BossDifficulty)
+                RequestBossSummonRemote:FireServer(_G.SelectedBoss .. "Boss", _G.BossDifficulty)
             end
         end
 
-        if getgenv().AutoSpawnTrueAizen and not IsEntityAlive("TrueAizen", true) then
-            RequestSpawnTrueAizenRemote:FireServer(getgenv().TrueAizenDifficulty)
+        if _G.AutoSpawnTrueAizen and not IsEntityAlive("TrueAizen", true) then
+            RequestSpawnTrueAizenRemote:FireServer(_G.TrueAizenDifficulty)
         end
-        if getgenv().AutoSpawnSukuna and not IsEntityAlive("StrongestinHistory", true) then
-            RequestSpawnStrongestRemote:FireServer("StrongestHistory", getgenv().SukunaDifficulty)
+        if _G.AutoSpawnSukuna and not IsEntityAlive("StrongestinHistory", true) then
+            RequestSpawnStrongestRemote:FireServer("StrongestHistory", _G.SukunaDifficulty)
         end
-        if getgenv().AutoSpawnRimuru and not IsEntityAlive("Rimuru", true) then
-            RequestSpawnRimuruRemote:FireServer(getgenv().RimuruDifficulty)
+        if _G.AutoSpawnRimuru and not IsEntityAlive("Rimuru", true) then
+            RequestSpawnRimuruRemote:FireServer(_G.RimuruDifficulty)
         end
-        if getgenv().AutoSpawnAnos and not IsEntityAlive("Anos", true) then
-            RequestSpawnAnosRemote:FireServer("Anos", getgenv().AnosDifficulty)
+        if _G.AutoSpawnAnos and not IsEntityAlive("Anos", true) then
+            RequestSpawnAnosRemote:FireServer("Anos", _G.AnosDifficulty)
         end
-        if getgenv().AutoSpawnGojo and not IsEntityAlive("StrongestofToday", true) then
-            RequestSpawnStrongestRemote:FireServer("StrongestToday", getgenv().GojoDifficulty)
+        if _G.AutoSpawnGojo and not IsEntityAlive("StrongestofToday", true) then
+            RequestSpawnStrongestRemote:FireServer("StrongestToday", _G.GojoDifficulty)
         end
     end
 end)
 
 task.spawn(function()
     while task.wait() do
-        if not getgenv().LoopFarm then
+        if not _G.LoopFarm then
             continue
         end
 
@@ -197,11 +113,11 @@ task.spawn(function()
 
         if hrp then
             for _, target in ipairs(FarmOrder) do
-                if not getgenv().LoopFarm then
+                if not _G.LoopFarm then
                     break
                 end
                 
-                if getgenv().IgnoredEntities and getgenv().IgnoredEntities[target.Name] == true then
+                if _G.IgnoredEntities and _G.IgnoredEntities[target.Name] == true then
                     continue
                 end
 
@@ -217,11 +133,11 @@ task.spawn(function()
                 local targetCF = EntityLocations[target.Name]
                 if targetCF then
                     hrp.CFrame = targetCF
-                    task.wait(getgenv().TpTime)
+                    task.wait(_G.TpTime)
 
                     if target.Remote then
                         TpRemote:FireServer(target.Remote)
-                        task.wait(getgenv().TpTime)
+                        task.wait(_G.TpTime)
                     end
                 end
             end
@@ -229,10 +145,10 @@ task.spawn(function()
     end
 end)
 
-getgenv().AntiAFK = false
+_G.AntiAFK = false
 task.spawn(function()
-    if not getgenv().AntiAFK then
-        getgenv().AntiAFK = true
+    if not _G.AntiAFK then
+        _G.AntiAFK = true
         task.spawn(function()
             while wait(320) do
                 pcall(function()
