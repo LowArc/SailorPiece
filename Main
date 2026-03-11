@@ -1,0 +1,249 @@
+-- ==========================================
+-- || SERVICES & REMOTES
+-- ==========================================
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+
+local TpRemote = Remotes:WaitForChild("TeleportToPortal")
+local RequestBossSummonRemote = Remotes:WaitForChild("RequestSummonBoss")
+local RequestSpawnStrongestRemote = Remotes:WaitForChild("RequestSpawnStrongestBoss")
+local RequestSpawnTrueAizenRemote = RemoteEvents:WaitForChild("RequestSpawnTrueAizen")
+local RequestSpawnRimuruRemote = RemoteEvents:WaitForChild("RequestSpawnRimuru")
+local RequestSpawnAnosRemote = Remotes:WaitForChild("RequestSpawnAnosBoss")
+
+local NPCsFolder = workspace:WaitForChild("NPCs")
+
+-- ==========================================
+-- || LOCATIONS & FARM ORDER
+-- ==========================================
+local EntityLocations = {
+    --// Regular NPCs
+    ["Hollow"] = CFrame.new(-365, 0, 1094),
+    ["Quincy"] = CFrame.new(-1350, 1604, 1595),
+    ["Swordsman"] = CFrame.new(-1271, 1, -1193),
+    ["AcademyTeacher"] = CFrame.new(1081, 2, 1279),
+    ["Slime"] = CFrame.new(-1123, 14, 366),
+    ["StrongSorcerer"] = CFrame.new(664, 2, -1697),
+
+    --// Timed Bosses
+    ["Gojo"] = CFrame.new(1858.32, 12.98, 338.14),
+    ["Yuji"] = CFrame.new(1537.92, 9.98, 226.10),
+    ["Sukuna"] = CFrame.new(1571.26, 77.22, -34.11),
+    ["Jinwoo"] = CFrame.new(248.74, 12.09, 927.54),
+    ["Alucard"] = CFrame.new(248.74, 12.09, 927.54),
+    ["Aizen"] = CFrame.new(-567.22, -0.42, 1228.49),
+    ["Yamato"] = CFrame.new(-1422.68, 24.42, -1383.46),
+
+    --// Boss Summon
+    ["Saber"] = CFrame.new(770, -1, -1086),
+    ["Ichigo"] = CFrame.new(770, -1, -1086),
+    ["QinShi"] = CFrame.new(770, -1, -1086),
+    ["Gilgamesh"] = CFrame.new(770, -1, -1086),
+    ["BlessedMaiden"] = CFrame.new(770, -1, -1086),
+    ["StrongestinHistory"] = CFrame.new(604, 3, -2314),
+    ["StrongestofToday"] = CFrame.new(139, 3, -2432),
+    ["Rimuru"] = CFrame.new(-1358, 19, 219),
+    ["Anos"] = CFrame.new(949, 1, 1370),
+    ["TrueAizen"] = CFrame.new(-1205, 1604, 1774),
+}
+
+local FarmOrder = {
+    --// Regular NPCs
+    { Name = "Quincy", Remote = "SoulSociety", IsNPC = true },
+    { Name = "Slime", Remote = "Slime", IsNPC = true },
+    { Name = "AcademyTeacher", Remote = "Academy", IsNPC = true },
+    { Name = "Swordsman", Remote = "Judgement", IsNPC = true },
+    { Name = "Hollow", Remote = "HuecoMundo", IsNPC = true },
+    { Name = "StrongSorcerer", Remote = "Shinjuku", IsNPC = true },
+
+    --// Timed Bosses
+    { Name = "Gojo", Remote = "Shibuya", IsTimed = true },
+    { Name = "Yuji", Remote = "Shibuya", IsTimed = true },
+    { Name = "Sukuna", Remote = "Shibuya", IsTimed = true },
+    { Name = "Jinwoo", Remote = "Sailor", IsTimed = true },
+    { Name = "Alucard", Remote = "Sailor", IsTimed = true },
+    { Name = "Aizen", Remote = "HuecoMundo", IsTimed = true },
+    {Name = "Yamato", Remote = "Judgement", IsTimed = true},
+
+    --// Boss Summon
+    { Name = "Saber", Remote = "Boss", IsBoss = true },
+    { Name = "Ichigo", Remote = "Boss", IsBoss = true },
+    { Name = "QinShi", Remote = "Boss", IsBoss = true },
+    { Name = "Gilgamesh", Remote = "Boss", IsBoss = true },
+    { Name = "BlessedMaiden", Remote = "Boss", IsBoss = true },
+    { Name = "StrongestinHistory", Remote = "Shinjuku", IsBoss = true },
+    { Name = "StrongestofToday", Remote = "Shinjuku", IsBoss = true },
+    { Name = "Rimuru", Remote = "Slime", IsBoss = true },
+    { Name = "Anos", Remote = "Academy", IsBoss = true },
+    { Name = "TrueAizen", Remote = "SoulSociety", IsBoss = true },
+}
+
+-- ==========================================
+-- || STATE MANAGEMENT (HIGH PERFORMANCE)
+-- ==========================================
+local ActiveNPCs = {}
+
+local function RegisterNPC(npc)
+    task.spawn(function()
+        local humanoid = npc:WaitForChild("Humanoid", 3)
+        if humanoid and humanoid.Health > 0 then
+            ActiveNPCs[npc] = true 
+
+            local deathConn
+            deathConn = humanoid.Died:Connect(function()
+                ActiveNPCs[npc] = nil
+                if deathConn then deathConn:Disconnect() end
+            end)
+
+            local removeConn
+            removeConn = npc.AncestryChanged:Connect(function(_, parent)
+                if not parent then
+                    ActiveNPCs[npc] = nil
+                    if removeConn then removeConn:Disconnect() end
+                    if deathConn then deathConn:Disconnect() end
+                end
+            end)
+        end
+    end)
+end
+
+for _, child in ipairs(NPCsFolder:GetChildren()) do
+    RegisterNPC(child)
+end
+
+NPCsFolder.ChildAdded:Connect(RegisterNPC)
+
+-- // MODIFIED: Bosses bypass counting entirely
+local function IsEntityAlive(queryName, isBoss, requiredCount)
+    requiredCount = requiredCount or 5 -- Default to 5 for NPCs
+    local currentCount = 0
+
+    for npc, _ in pairs(ActiveNPCs) do
+        if npc and npc.Parent then
+            local npcName = npc.Name
+
+            if isBoss then
+                -- For bosses, just find ONE and immediately return true
+                if npcName:find("^" .. queryName) then
+                    return true
+                end
+            else
+                -- For regular NPCs, count them up
+                if npcName:find(queryName) then
+                    currentCount = currentCount + 1
+                    -- If we hit the required amount, break early
+                    if currentCount >= requiredCount then
+                        return true
+                    end
+                end
+            end
+        else
+            ActiveNPCs[npc] = nil
+        end
+    end
+    return false
+end
+
+-- ==========================================
+-- || MAIN LOOPS
+-- ==========================================
+
+task.spawn(function()
+    while task.wait(0.5) do
+        if getgenv().AutoSpawnBoss then
+            local bossList = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" }
+            local anyStandardAlive = false
+            for _, bName in ipairs(bossList) do
+                if IsEntityAlive(bName, true) then -- Boss check, skips counting
+                    anyStandardAlive = true
+                    break
+                end
+            end
+            if not anyStandardAlive then
+                RequestBossSummonRemote:FireServer(getgenv().SelectedBoss .. "Boss", getgenv().BossDifficulty)
+            end
+        end
+
+        if getgenv().AutoSpawnTrueAizen and not IsEntityAlive("TrueAizen", true) then
+            RequestSpawnTrueAizenRemote:FireServer(getgenv().TrueAizenDifficulty)
+        end
+        if getgenv().AutoSpawnSukuna and not IsEntityAlive("StrongestinHistory", true) then
+            RequestSpawnStrongestRemote:FireServer("StrongestHistory", getgenv().SukunaDifficulty)
+        end
+        if getgenv().AutoSpawnRimuru and not IsEntityAlive("Rimuru", true) then
+            RequestSpawnRimuruRemote:FireServer(getgenv().RimuruDifficulty)
+        end
+        if getgenv().AutoSpawnAnos and not IsEntityAlive("Anos", true) then
+            RequestSpawnAnosRemote:FireServer("Anos", getgenv().AnosDifficulty)
+        end
+        if getgenv().AutoSpawnGojo and not IsEntityAlive("StrongestofToday", true) then
+            RequestSpawnStrongestRemote:FireServer("StrongestToday", getgenv().GojoDifficulty)
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait() do
+        if not getgenv().LoopFarm then
+            continue
+        end
+
+        local char = LocalPlayer.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if hrp then
+            for _, target in ipairs(FarmOrder) do
+                if not getgenv().LoopFarm then
+                    break
+                end
+                
+                if getgenv().IgnoredEntities and getgenv().IgnoredEntities[target.Name] == true then
+                    continue
+                end
+
+                local isBossType = target.IsTimed or target.IsBoss
+
+                -- We don't even need to pass a number for bosses anymore, the function ignores it if isBossType is true
+                local requiredAmount = 5 
+
+                if not IsEntityAlive(target.Name, isBossType, requiredAmount) then
+                    continue
+                end
+
+                local targetCF = EntityLocations[target.Name]
+                if targetCF then
+                    hrp.CFrame = targetCF
+                    task.wait(getgenv().TpTime)
+
+                    if target.Remote then
+                        TpRemote:FireServer(target.Remote)
+                        task.wait(getgenv().TpTime)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+getgenv().AntiAFK = false
+task.spawn(function()
+    if not getgenv().AntiAFK then
+        getgenv().AntiAFK = true
+        task.spawn(function()
+            while wait(320) do
+                pcall(function()
+                    local anti = game:GetService("VirtualUser")
+                    game:GetService("Players").LocalPlayer.Idled:Connect(function()
+                        anti:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                        task.wait(1)
+                        anti:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                    end)
+                end)
+            end
+        end)    
+    end
+end)
