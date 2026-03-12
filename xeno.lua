@@ -413,7 +413,7 @@ function Farmer:Start()
 									task.wait(cfg.TpTime + 0.5)
 								end
 
-								if cfg.AutoSkill.Enabled and (tick() - self.LastSkillTime > 1) then
+								if cfg.AutoSkill.Enabled and (tick() - self.LastSkillTime > 0.1) then
 									self.LastSkillTime = tick()
 									for key, skillData in pairs(cfg.AutoSkill.Skills) do
 										if skillData.Enabled then
@@ -465,59 +465,65 @@ function Utility.EnableAntiAFK()
 end
 
 function Utility.EnableAutoRejoin()
-    local TeleportService = game:GetService("TeleportService")
-    local GuiService = game:GetService("GuiService")
-    
-    -- This handles the standard "You have been disconnected" popup
-    GuiService.ErrorMessageChanged:Connect(function()
-        local cfg = _G.FarmConfig
-        if not cfg.AutoRejoin then return end
+	local TeleportService = game:GetService("TeleportService")
+	local GuiService = game:GetService("GuiService")
 
-        -- Check if it's a kick from your own FriendCheck
-        -- (We check the actual kick reason from the client)
-        local lastError = GuiService:GetErrorMessage()
-        if string.find(lastError, "ArcX Security") then
-            warn("Auto-Rejoin blocked: Security Kick.")
-            return
-        end
+	-- This handles the standard "You have been disconnected" popup
+	GuiService.ErrorMessageChanged:Connect(function()
+		local cfg = _G.FarmConfig
+		if not cfg.AutoRejoin then
+			return
+		end
 
-        -- Internet Outage Protection Loop
-        spawn(function()
-            while true do
-                -- Attempt to teleport
-                TeleportService:Teleport(game.PlaceId, LocalPlayer)
-                
-                -- Wait 10 seconds before trying again if the first one failed
-                task.wait(10) 
-            end
-        end)
-    end)
+		-- Check if it's a kick from your own FriendCheck
+		-- (We check the actual kick reason from the client)
+		local lastError = GuiService:GetErrorMessage()
+		if string.find(lastError, "ArcX Security") then
+			warn("Auto-Rejoin blocked: Security Kick.")
+			return
+		end
+
+		-- Internet Outage Protection Loop
+		spawn(function()
+			while true do
+				-- Attempt to teleport
+				TeleportService:Teleport(game.PlaceId, LocalPlayer)
+
+				-- Wait 10 seconds before trying again if the first one failed
+				task.wait(10)
+			end
+		end)
+	end)
 end
 
 function Utility.EnableFriendCheck()
-    local function checkAndKick(player)
-        if not _G.FarmConfig.FriendOnly or player == LocalPlayer then 
-            return 
-        end
+	local function checkAndKick(player)
+		if not _G.FarmConfig.FriendOnly or player == LocalPlayer then
+			return
+		end
 
-        local isFriend = false
-        local success, result = pcall(function()
-            return LocalPlayer:IsFriendsWith(player.UserId)
-        end)
+		local isFriend = false
+		local success, result = pcall(function()
+			return LocalPlayer:IsFriendsWith(player.UserId)
+		end)
 
-        if success then isFriend = result end
+		if success then
+			isFriend = result
+		end
 
-        if not isFriend then
-            -- The [ArcX Security] tag is the "Key" that tells AutoRejoin to stay off.
-            LocalPlayer:Kick("\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nAuto-Rejoin disabled to prevent looping.")
-        end
-    end
+		if not isFriend then
+			-- The [ArcX Security] tag is the "Key" that tells AutoRejoin to stay off.
+			LocalPlayer:Kick(
+				"\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nAuto-Rejoin disabled to prevent looping."
+			)
+		end
+	end
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        checkAndKick(player)
-    end
+	for _, player in ipairs(Players:GetPlayers()) do
+		checkAndKick(player)
+	end
 
-    Players.PlayerAdded:Connect(checkAndKick)
+	Players.PlayerAdded:Connect(checkAndKick)
 end
 
 function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
@@ -809,7 +815,7 @@ end)
 
 -- [[ Specials Tab ]]
 Tabs.Specials:AddParagraph({ Title = "Special Boss Spawners", Content = "Configure auto-spawning for special bosses." })
-local difficultyLevels = { "Normal", "Hard", "Nightmare" }
+local difficultyLevels = { "Normal", "Hard", "Extreme" }
 
 for bossName, bossData in pairs(Config.Specials) do
 	local Toggle_Special = Tabs.Specials:AddToggle("Special_" .. bossName, {
@@ -835,54 +841,56 @@ end
 Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
 
 local Toggle_WhiteScreen = Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
-    Title = "WhiteScreen Mode",
-    Description = "Disables 3D Rendering to save CPU/GPU. Screen will freeze/go dark.",
-    Default = Config.WhiteScreen
+	Title = "WhiteScreen Mode",
+	Description = "Disables 3D Rendering to save CPU/GPU. Screen will freeze/go dark.",
+	Default = Config.WhiteScreen,
 })
 
 Toggle_WhiteScreen:OnChanged(function(Value)
-    Config.WhiteScreen = Value
-    game:GetService("RunService"):Set3dRenderingEnabled(not Value)
-    
-    if Value then
-        Fluent:Notify({
-            Title = "ArcX Optimization",
-            Content = "WhiteScreen Mode Active. Enjoy the low CPU usage!",
-            Duration = 3
-        })
-    end
+	Config.WhiteScreen = Value
+	game:GetService("RunService"):Set3dRenderingEnabled(not Value)
+
+	if Value then
+		Fluent:Notify({
+			Title = "ArcX Optimization",
+			Content = "WhiteScreen Mode Active. Enjoy the low CPU usage!",
+			Duration = 3,
+		})
+	end
 end)
 
 local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
-    Title = "Auto Rejoin on Disconnect",
-    Description = "Automatically rejoins the server if you get kicked or lose connection.",
-    Default = Config.AutoRejoin
+	Title = "Auto Rejoin on Disconnect",
+	Description = "Automatically rejoins the server if you get kicked or lose connection.",
+	Default = Config.AutoRejoin,
 })
 
 Toggle_AutoRejoin:OnChanged(function(Value)
-    Config.AutoRejoin = Value
+	Config.AutoRejoin = Value
 end)
 
 local Toggle_FriendOnly = Tabs.Settings:AddToggle("Toggle_FriendOnly", {
-    Title = "Friend-Only Mode (Anti-Stranger)",
-    Description = "Kicks you from the server if a non-friend is present.",
-    Default = Config.FriendOnly
+	Title = "Friend-Only Mode (Anti-Stranger)",
+	Description = "Kicks you from the server if a non-friend is present.",
+	Default = Config.FriendOnly,
 })
 
 Toggle_FriendOnly:OnChanged(function(Value)
-    Config.FriendOnly = Value
-    if Value then
-        for _, player in ipairs(game.Players:GetPlayers()) do
-            if player ~= LocalPlayer then
-                local isFriend = false
-                pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
-                if not isFriend then 
-                    -- Included the tag here too!
-                    LocalPlayer:Kick("[ArcX Security] Friend-Only Mode Enabled: Stranger found.") 
-                end
-            end
-        end
-    end
+	Config.FriendOnly = Value
+	if Value then
+		for _, player in ipairs(game.Players:GetPlayers()) do
+			if player ~= LocalPlayer then
+				local isFriend = false
+				pcall(function()
+					isFriend = LocalPlayer:IsFriendsWith(player.UserId)
+				end)
+				if not isFriend then
+					-- Included the tag here too!
+					LocalPlayer:Kick("[ArcX Security] Friend-Only Mode Enabled: Stranger found.")
+				end
+			end
+		end
+	end
 end)
 
 -- [[ Settings & SaveManager Integration ]]
