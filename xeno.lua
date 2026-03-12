@@ -509,7 +509,7 @@ local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.
 
 local Window = Fluent:CreateWindow({
     Title = "ArcX 💀🥀",
-    SubTitle = "Best Script Of All Time???",
+    SubTitle = "| Best Script Of All Time???",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
