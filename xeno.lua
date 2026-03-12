@@ -465,17 +465,31 @@ end
 
 function Utility.EnableAutoRejoin()
     local TeleportService = game:GetService("TeleportService")
-    local overlay = game:GetService("CoreGui"):WaitForChild("RobloxPromptGui"):WaitForChild("promptOverlay")
+    local GuiService = game:GetService("GuiService")
+    
+    -- This handles the standard "You have been disconnected" popup
+    GuiService.ErrorMessageChanged:Connect(function()
+        local cfg = _G.FarmConfig
+        if not cfg.AutoRejoin then return end
 
-    local connection
-    connection = overlay.ChildAdded:Connect(function(v)
-        if v.Name == "ErrorPrompt" then
-            -- /// Check the Config before teleporting ///
-            if _G.FarmConfig.AutoRejoin then
-                connection:Disconnect()
-                TeleportService:Teleport(game.PlaceId)
-            end
+        -- Check if it's a kick from your own FriendCheck
+        -- (We check the actual kick reason from the client)
+        local lastError = GuiService:GetErrorMessage()
+        if string.find(lastError, "ArcX Security") then
+            warn("Auto-Rejoin blocked: Security Kick.")
+            return
         end
+
+        -- Internet Outage Protection Loop
+        spawn(function()
+            while true do
+                -- Attempt to teleport
+                TeleportService:Teleport(game.PlaceId, LocalPlayer)
+                
+                -- Wait 10 seconds before trying again if the first one failed
+                task.wait(10) 
+            end
+        end)
     end)
 end
 
@@ -493,16 +507,15 @@ function Utility.EnableFriendCheck()
         if success then isFriend = result end
 
         if not isFriend then
-            LocalPlayer:Kick("\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nRejoining to find a safe server...")
+            -- The [ArcX Security] tag is the "Key" that tells AutoRejoin to stay off.
+            LocalPlayer:Kick("\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nAuto-Rejoin disabled to prevent looping.")
         end
     end
 
-    -- Scan current players
     for _, player in ipairs(Players:GetPlayers()) do
         checkAndKick(player)
     end
 
-    -- Listen for new joins
     Players.PlayerAdded:Connect(checkAndKick)
 end
 
@@ -832,21 +845,20 @@ end)
 
 local Toggle_FriendOnly = Tabs.Settings:AddToggle("Toggle_FriendOnly", {
     Title = "Friend-Only Mode (Anti-Stranger)",
-    Description = "Kicks you from the server if a non-friend is present. Works best with Auto-Rejoin.",
+    Description = "Kicks you from the server if a non-friend is present.",
     Default = Config.FriendOnly
 })
 
 Toggle_FriendOnly:OnChanged(function(Value)
     Config.FriendOnly = Value
-    -- If they turn it on mid-game, run a check immediately
     if Value then
         for _, player in ipairs(game.Players:GetPlayers()) do
             if player ~= LocalPlayer then
-                -- This triggers the check logic we wrote in Utility
                 local isFriend = false
                 pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
                 if not isFriend then 
-                    LocalPlayer:Kick("Friend-Only Mode Enabled: Stranger found.") 
+                    -- Included the tag here too!
+                    LocalPlayer:Kick("[ArcX Security] Friend-Only Mode Enabled: Stranger found.") 
                 end
             end
         end
