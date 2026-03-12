@@ -659,7 +659,7 @@ SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({"Dropdown_Weapon"}) -- Don't auto-save weapon list state as it changes
-InterfaceManager:SetFolder("ArcXAutoFarm")
+InterfaceManager:SetFolder("ArcX AutoFarm")
 SaveManager:SetFolder("ArcX AutoFarm/configs")
 
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
