@@ -1,165 +1,584 @@
 -- ==========================================
--- || STATE MANAGEMENT (HIGH PERFORMANCE)
+-- || INITIALIZATION
 -- ==========================================
-local ActiveNPCs = {}
+repeat
+    task.wait()
+until game:IsLoaded()
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+repeat
+    task.wait()
+until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 
-local function RegisterNPC(npc)
+-- ==========================================
+-- || CONFIGURATION (Linked to getgenv)
+-- ==========================================
+local Config = {
+    LoopFarm = true,
+    TpTime = 0.1,
+    IgnoredEntities = {
+        Hollow = false,
+        Quincy = true,
+        Swordsman = false,
+        AcademyTeacher = false,
+        Slime = false,
+        StrongSorcerer = false,
+        Curse = true,
+        Gojo = false,
+        Yuji = false,
+        Sukuna = false,
+        Jinwoo = false,
+        Alucard = false,
+        Aizen = false,
+        Yamato = true,
+        Saber = false,
+        Ichigo = false,
+        QinShi = false,
+        Gilgamesh = false,
+        BlessedMaiden = false,
+        StrongestinHistory = false,
+        StrongestofToday = false,
+        Rimuru = false,
+        Anos = false,
+        TrueAizen = false,
+    },
+    Boss = {
+        AutoSpawn = true,
+        Selected = "Saber",
+        Difficulty = "Normal",
+    },
+    Specials = {
+        TrueAizen = { Auto = false, Diff = "Normal" },
+        Sukuna = { Auto = false, Diff = "Normal" },
+        Gojo = { Auto = false, Diff = "Normal" },
+        Rimuru = { Auto = false, Diff = "Normal" },
+        Anos = { Auto = false, Diff = "Normal" },
+    },
+    AutoSkill = {
+        Enabled = true,
+        Skills = {
+            Z = { Id = 1, Enabled = false },
+            X = { Id = 2, Enabled = true },
+            C = { Id = 3, Enabled = true },
+            V = { Id = 4, Enabled = false },
+            F = { Id = 5, Enabled = false },
+        }
+    }
+}
+
+-- Bind to getgenv() so external UIs can still toggle them
+getgenv().FarmConfig = Config
+
+-- ==========================================
+-- || CONSTANTS
+-- ==========================================
+local CONSTANTS = {
+    Locations = {
+        -- NPCs
+        Hollow = CFrame.new(-365, 0, 1094),
+        Quincy = CFrame.new(-1350, 1604, 1595),
+        Swordsman = CFrame.new(-1271, 1, -1193),
+        AcademyTeacher = CFrame.new(1081, 2, 1279),
+        Slime = CFrame.new(-1123, 14, 366),
+        StrongSorcerer = CFrame.new(664, 2, -1697),
+        -- Timed
+        Gojo = CFrame.new(1858.32, 12.98, 338.14),
+        Yuji = CFrame.new(1537.92, 9.98, 226.10),
+        Sukuna = CFrame.new(1571.26, 77.22, -34.11),
+        Jinwoo = CFrame.new(248.74, 12.09, 927.54),
+        Alucard = CFrame.new(248.74, 12.09, 927.54),
+        Aizen = CFrame.new(-567.22, -0.42, 1228.49),
+        Yamato = CFrame.new(-1422.68, 24.42, -1383.46),
+        -- Summons
+        Saber = CFrame.new(770, -1, -1086),
+        Ichigo = CFrame.new(770, -1, -1086),
+        QinShi = CFrame.new(770, -1, -1086),
+        Gilgamesh = CFrame.new(770, -1, -1086),
+        BlessedMaiden = CFrame.new(770, -1, -1086),
+        StrongestinHistory = CFrame.new(604, 3, -2314),
+        StrongestofToday = CFrame.new(139, 3, -2432),
+        Rimuru = CFrame.new(-1358, 19, 219),
+        Anos = CFrame.new(949, 1, 1370),
+        TrueAizen = CFrame.new(-1205, 1604, 1774),
+    },
+    FarmOrder = {
+        -- Regular
+        { Name = "Swordsman", Remote = "Judgement", IsBossType = false },
+        { Name = "Quincy", Remote = "SoulSociety", IsBossType = false },
+        { Name = "AcademyTeacher", Remote = "Academy", IsBossType = false },
+        { Name = "Slime", Remote = "Slime", IsBossType = false },
+        { Name = "StrongSorcerer", Remote = "Shinjuku", IsBossType = false },
+        { Name = "Hollow", Remote = "HuecoMundo", IsBossType = false },
+
+        -- Timed
+        { Name = "Gojo", Remote = "Shibuya", IsBossType = true },
+        { Name = "Yuji", Remote = "Shibuya", IsBossType = true },
+        { Name = "Sukuna", Remote = "Shibuya", IsBossType = true },
+        { Name = "Jinwoo", Remote = "Sailor", IsBossType = true },
+        { Name = "Alucard", Remote = "Sailor", IsBossType = true },
+        { Name = "Aizen", Remote = "HuecoMundo", IsBossType = true },
+        { Name = "Yamato", Remote = "Judgement", IsBossType = true },
+        -- Bosses
+        { Name = "Saber", Remote = "Boss", IsBossType = true },
+        { Name = "Ichigo", Remote = "Boss", IsBossType = true },
+        { Name = "QinShi", Remote = "Boss", IsBossType = true },
+        { Name = "Gilgamesh", Remote = "Boss", IsBossType = true },
+        { Name = "BlessedMaiden", Remote = "Boss", IsBossType = true },
+        { Name = "StrongestinHistory", Remote = "Shinjuku", IsBossType = true },
+        { Name = "StrongestofToday", Remote = "Shinjuku", IsBossType = true },
+        { Name = "Rimuru", Remote = "Slime", IsBossType = true },
+        { Name = "Anos", Remote = "Academy", IsBossType = true },
+        { Name = "TrueAizen", Remote = "SoulSociety", IsBossType = true },
+    },
+}
+
+-- ==========================================
+-- || CLASS: Entity Tracker
+-- ==========================================
+local EntityTracker = {}
+EntityTracker.__index = EntityTracker
+
+function EntityTracker.new(npcsFolder)
+    local self = setmetatable({
+        Folder = npcsFolder,
+        Active = {},
+        Connections = {},
+    }, EntityTracker)
+    self:Init()
+    return self
+end
+
+function EntityTracker:Register(npc)
     task.spawn(function()
         local humanoid = npc:WaitForChild("Humanoid", 3)
         if humanoid and humanoid.Health > 0 then
-            ActiveNPCs[npc] = true 
+            self.Active[npc] = true
 
-            local deathConn
+            local deathConn, removeConn
             deathConn = humanoid.Died:Connect(function()
-                ActiveNPCs[npc] = nil
-                if deathConn then deathConn:Disconnect() end
+                self.Active[npc] = nil
+                deathConn:Disconnect()
             end)
 
-            local removeConn
             removeConn = npc.AncestryChanged:Connect(function(_, parent)
                 if not parent then
-                    ActiveNPCs[npc] = nil
-                    if removeConn then removeConn:Disconnect() end
-                    if deathConn then deathConn:Disconnect() end
+                    self.Active[npc] = nil
+                    removeConn:Disconnect()
+                    if deathConn then
+                        deathConn:Disconnect()
+                    end
                 end
             end)
         end
     end)
 end
 
-for _, child in ipairs(NPCsFolder:GetChildren()) do
-    RegisterNPC(child)
+function EntityTracker:Init()
+    for _, child in ipairs(self.Folder:GetChildren()) do
+        self:Register(child)
+    end
+    self.Folder.ChildAdded:Connect(function(child)
+        self:Register(child)
+    end)
 end
 
-NPCsFolder.ChildAdded:Connect(RegisterNPC)
-
--- // MODIFIED: Bosses bypass counting entirely
-local function IsEntityAlive(queryName, isBoss, requiredCount)
-    requiredCount = requiredCount or 5 -- Default to 5 for NPCs
+function EntityTracker:IsAlive(queryName, isBossType, requiredCount)
+    requiredCount = requiredCount or 5
     local currentCount = 0
 
-    for npc, _ in pairs(ActiveNPCs) do
+    for npc, _ in pairs(self.Active) do
         if npc and npc.Parent then
-            local npcName = npc.Name
-
-            if isBoss then
-                -- For bosses, just find ONE and immediately return true
-                if npcName:find("^" .. queryName) then
+            if isBossType then
+                if string.find(npc.Name, "^" .. queryName) then
                     return true
                 end
             else
-                -- For regular NPCs, count them up
-                if npcName:find(queryName) then
-                    currentCount = currentCount + 1
-                    -- If we hit the required amount, break early
+                if string.find(npc.Name, queryName) then
+                    currentCount += 1
                     if currentCount >= requiredCount then
                         return true
                     end
                 end
             end
         else
-            ActiveNPCs[npc] = nil
+            self.Active[npc] = nil
         end
     end
     return false
 end
 
 -- ==========================================
--- || MAIN LOOPS
+-- || CLASS: Boss Spawner
 -- ==========================================
+local BossSpawner = {}
+BossSpawner.__index = BossSpawner
 
-task.spawn(function()
-    while task.wait(0.5) do
-        if _G.AutoSpawnBoss then
-            local bossList = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" }
-            local anyStandardAlive = false
-            for _, bName in ipairs(bossList) do
-                if IsEntityAlive(bName, true) then -- Boss check, skips counting
-                    anyStandardAlive = true
-                    break
+function BossSpawner.new(tracker, remotes)
+    return setmetatable({
+        Tracker = tracker,
+        Remotes = remotes,
+        StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" },
+    }, BossSpawner)
+end
+
+function BossSpawner:Start()
+    task.spawn(function()
+        while task.wait(0.5) do
+            local cfg = getgenv().FarmConfig
+
+            -- Standard Bosses
+            if cfg.Boss.AutoSpawn then
+                local anyAlive = false
+                for _, bName in ipairs(self.StandardBosses) do
+                    if self.Tracker:IsAlive(bName, true) then
+                        anyAlive = true
+                        break
+                    end
+                end
+                if not anyAlive then
+                    self.Remotes.SummonBoss:FireServer(cfg.Boss.Selected .. "Boss", cfg.Boss.Difficulty)
                 end
             end
-            if not anyStandardAlive then
-                RequestBossSummonRemote:FireServer(_G.SelectedBoss .. "Boss", _G.BossDifficulty)
+
+            -- Special Bosses
+            local specs = cfg.Specials
+            if specs.TrueAizen.Auto and not self.Tracker:IsAlive("TrueAizen", true) then
+                self.Remotes.TrueAizen:FireServer(specs.TrueAizen.Diff)
+            end
+            if specs.Sukuna.Auto and not self.Tracker:IsAlive("StrongestinHistory", true) then
+                self.Remotes.SpawnStrongest:FireServer("StrongestHistory", specs.Sukuna.Diff)
+            end
+            if specs.Gojo.Auto and not self.Tracker:IsAlive("StrongestofToday", true) then
+                self.Remotes.SpawnStrongest:FireServer("StrongestToday", specs.Gojo.Diff)
+            end
+            if specs.Rimuru.Auto and not self.Tracker:IsAlive("Rimuru", true) then
+                self.Remotes.Rimuru:FireServer(specs.Rimuru.Diff)
+            end
+            if specs.Anos.Auto and not self.Tracker:IsAlive("Anos", true) then
+                self.Remotes.Anos:FireServer("Anos", specs.Anos.Diff)
             end
         end
+    end)
+end
 
-        if _G.AutoSpawnTrueAizen and not IsEntityAlive("TrueAizen", true) then
-            RequestSpawnTrueAizenRemote:FireServer(_G.TrueAizenDifficulty)
-        end
-        if _G.AutoSpawnSukuna and not IsEntityAlive("StrongestinHistory", true) then
-            RequestSpawnStrongestRemote:FireServer("StrongestHistory", _G.SukunaDifficulty)
-        end
-        if _G.AutoSpawnRimuru and not IsEntityAlive("Rimuru", true) then
-            RequestSpawnRimuruRemote:FireServer(_G.RimuruDifficulty)
-        end
-        if _G.AutoSpawnAnos and not IsEntityAlive("Anos", true) then
-            RequestSpawnAnosRemote:FireServer("Anos", _G.AnosDifficulty)
-        end
-        if _G.AutoSpawnGojo and not IsEntityAlive("StrongestofToday", true) then
-            RequestSpawnStrongestRemote:FireServer("StrongestToday", _G.GojoDifficulty)
-        end
-    end
-end)
+-- ==========================================
+-- || CLASS: Farmer
+-- ==========================================
+local Farmer = {}
+Farmer.__index = Farmer
 
-task.spawn(function()
-    while task.wait() do
-        if not _G.LoopFarm then
-            continue
-        end
+function Farmer.new(tracker, tpRemote, abilityRemote)
+    return setmetatable({
+        Tracker = tracker,
+        TpRemote = tpRemote,
+        AbilityRemote = abilityRemote,
+        LastSkillTime = 0
+    }, Farmer)
+end
 
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+function Farmer:Start()
+    task.spawn(function()
+        while task.wait() do
+            local cfg = getgenv().FarmConfig
+            if not cfg.LoopFarm then
+                continue
+            end
 
-        if hrp then
-            for _, target in ipairs(FarmOrder) do
-                if not _G.LoopFarm then
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then
+                continue
+            end
+
+            for _, target in ipairs(CONSTANTS.FarmOrder) do
+                if not cfg.LoopFarm then
                     break
                 end
-                
-                if _G.IgnoredEntities and _G.IgnoredEntities[target.Name] == true then
+                if cfg.IgnoredEntities[target.Name] then
                     continue
                 end
 
-                local isBossType = target.IsTimed or target.IsBoss
-
-                -- We don't even need to pass a number for bosses anymore, the function ignores it if isBossType is true
-                local requiredAmount = 5 
-
-                if not IsEntityAlive(target.Name, isBossType, requiredAmount) then
+                if not self.Tracker:IsAlive(target.Name, target.IsBossType, 5) then
                     continue
                 end
 
-                local targetCF = EntityLocations[target.Name]
-                if targetCF then
-                    hrp.CFrame = targetCF
-                    task.wait(_G.TpTime)
+                local spawnCF = CONSTANTS.Locations[target.Name]
+                if spawnCF then
+                    if target.IsBossType then
+                        -- 1. FIRE REMOTE ONCE TO ENTER
+                        if target.Remote then
+                            self.TpRemote:FireServer(target.Remote)
+                            task.wait(0.2)
+                        end
 
-                    if target.Remote then
-                        TpRemote:FireServer(target.Remote)
-                        task.wait(_G.TpTime)
+                        -- 2. LOCK-ON LOOP
+                        while
+                            cfg.LoopFarm
+                            and not cfg.IgnoredEntities[target.Name]
+                            and self.Tracker:IsAlive(target.Name, true)
+                        do
+                            local currentChar = LocalPlayer.Character
+                            local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+
+                            if currentHrp then
+                                local liveBoss = nil
+                                for npc, _ in pairs(self.Tracker.Active) do
+                                    if npc.Name:find("^" .. target.Name) and npc:FindFirstChild("HumanoidRootPart") then
+                                        liveBoss = npc.HumanoidRootPart
+                                        break
+                                    end
+                                end
+
+                                local targetGoal = liveBoss and liveBoss.CFrame or spawnCF
+                                local distance = (currentHrp.Position - targetGoal.Position).Magnitude
+
+                                -- 3. MOVE IF DISPLACED
+                                if distance > 20 then
+                                    if distance > 150 and target.Remote then
+                                        self.TpRemote:FireServer(target.Remote)
+                                        task.wait(cfg.TpTime)
+                                    end
+
+                                    currentHrp.CFrame = targetGoal * CFrame.new(0, 0, 3)
+                                    task.wait(cfg.TpTime)
+                                end
+
+                                -- 4. AUTO SKILLS (Bosses Only)
+                                -- Throttled to fire skills safely every 1 second to avoid rate-limiting
+                                if cfg.AutoSkill.Enabled and task.wait(.1) then
+                                    for key, skillData in pairs(cfg.AutoSkill.Skills) do
+                                        if skillData.Enabled then
+                                            task.spawn(function()
+                                                pcall(function()
+                                                    self.AbilityRemote:FireServer(skillData.Id)
+                                                end)
+                                            end)
+                                        end
+                                    end
+                                end
+                            end
+                            task.wait(0.1)
+                        end
+                    else
+                        -- || STANDARD NPC LOGIC ||
+                        if target.Remote then
+                            self.TpRemote:FireServer(target.Remote)
+                        end
+
+                        local currentHrp = LocalPlayer.Character
+                            and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if currentHrp then
+                            currentHrp.CFrame = spawnCF
+                            task.wait(cfg.TpTime)
+                        end
                     end
                 end
             end
         end
+    end)
+end
+
+-- ==========================================
+-- || CLASS: Utility / Anti-AFK
+-- ==========================================
+local Utility = {}
+function Utility.EnableAntiAFK()
+    if getgenv().AntiAFK_Enabled then
+        return
     end
+    getgenv().AntiAFK_Enabled = true
+
+    local VirtualUser = game:GetService("VirtualUser")
+
+    LocalPlayer.Idled:Connect(function()
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end)
+end
+
+-- ==========================================
+-- || EXECUTION
+-- ==========================================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+local AbilityRemote = ReplicatedStorage:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility")
+
+local GameRemotes = {
+    Teleport = Remotes:WaitForChild("TeleportToPortal"),
+    SummonBoss = Remotes:WaitForChild("RequestSummonBoss"),
+    SpawnStrongest = Remotes:WaitForChild("RequestSpawnStrongestBoss"),
+    Anos = Remotes:WaitForChild("RequestSpawnAnosBoss"),
+    TrueAizen = RemoteEvents:WaitForChild("RequestSpawnTrueAizen"),
+    Rimuru = RemoteEvents:WaitForChild("RequestSpawnRimuru"),
+}
+
+local Tracker = EntityTracker.new(workspace:WaitForChild("NPCs"))
+local Spawner = BossSpawner.new(Tracker, GameRemotes)
+local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote)
+
+Utility.EnableAntiAFK()
+Spawner:Start()
+AutoFarm:Start()
+
+print("ArcX AutoFarm Initialized Successfully.")
+
+-- ==========================================
+-- || UI INTEGRATION (FLUENT & SAVEMANAGER)
+-- ==========================================
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title = "ArcX AutoFarm",
+    SubTitle = "Integrated UI",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "Main", Icon = "home" }),
+    Mobs = Window:AddTab({ Title = "Entities", Icon = "swords" }),
+    Bosses = Window:AddTab({ Title = "Standard Bosses", Icon = "skull" }),
+    Specials = Window:AddTab({ Title = "Special Bosses", Icon = "star" }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
+}
+
+-- [[ Main Tab ]]
+local Toggle_LoopFarm = Tabs.Main:AddToggle("Toggle_LoopFarm", {Title = "Enable Auto Farm", Default = Config.LoopFarm })
+Toggle_LoopFarm:OnChanged(function(Value)
+    Config.LoopFarm = Value
 end)
 
-_G.AntiAFK = false
-task.spawn(function()
-    if not _G.AntiAFK then
-        _G.AntiAFK = true
-        task.spawn(function()
-            while wait(320) do
-                pcall(function()
-                    local anti = game:GetService("VirtualUser")
-                    game:GetService("Players").LocalPlayer.Idled:Connect(function()
-                        anti:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                        task.wait(1)
-                        anti:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                    end)
-                end)
-            end
-        end)    
+local Slider_TpTime = Tabs.Main:AddSlider("Slider_TpTime", {
+    Title = "Teleport Delay",
+    Description = "Wait time between teleports",
+    Default = Config.TpTime,
+    Min = 0,
+    Max = 2,
+    Rounding = 1,
+    Callback = function(Value)
+        Config.TpTime = Value
     end
+})
+
+-- [[ Main Tab: Auto Skills ]]
+Tabs.Main:AddParagraph({
+    Title = "Auto Skills",
+    Content = "Automatically use abilities ONLY when fighting Bosses."
+})
+
+local Toggle_AutoSkill = Tabs.Main:AddToggle("Toggle_AutoSkill", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Enabled })
+Toggle_AutoSkill:OnChanged(function(Value)
+    Config.AutoSkill.Enabled = Value
 end)
+
+for key, data in pairs(Config.AutoSkill.Skills) do
+    local Toggle_Skill = Tabs.Main:AddToggle("Skill_" .. key, {
+        Title = "Use Skill " .. key,
+        Default = data.Enabled
+    })
+    Toggle_Skill:OnChanged(function(Value)
+        Config.AutoSkill.Skills[key].Enabled = Value
+    end)
+end
+
+-- [[ Mobs / Entities Tab ]]
+Tabs.Mobs:AddParagraph({
+    Title = "Entity Targeting",
+    Content = "Enable the entities you want the script to farm."
+})
+
+local sortedEntities = {}
+for k, _ in pairs(Config.IgnoredEntities) do table.insert(sortedEntities, k) end
+table.sort(sortedEntities)
+
+for _, entityName in ipairs(sortedEntities) do
+    local Toggle_Entity = Tabs.Mobs:AddToggle("Mob_" .. entityName, {
+        Title = "Farm " .. entityName,
+        Default = not Config.IgnoredEntities[entityName] 
+    })
+    Toggle_Entity:OnChanged(function(Value)
+        Config.IgnoredEntities[entityName] = not Value
+    end)
+end
+
+-- [[ Bosses Tab ]]
+local Toggle_AutoSpawn = Tabs.Bosses:AddToggle("Toggle_AutoSpawn", {Title = "Auto-Spawn Bosses", Default = Config.Boss.AutoSpawn })
+Toggle_AutoSpawn:OnChanged(function(Value)
+    Config.Boss.AutoSpawn = Value
+end)
+
+local Dropdown_SelectedBoss = Tabs.Bosses:AddDropdown("Dropdown_SelectedBoss", {
+    Title = "Select Boss",
+    Values = {"Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden"},
+    Multi = false,
+    Default = 1,
+})
+Dropdown_SelectedBoss:OnChanged(function(Value)
+    Config.Boss.Selected = Value
+end)
+
+local Dropdown_BossDifficulty = Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
+    Title = "Difficulty",
+    Values = {"Normal", "Hard", "Extreme"}, 
+    Multi = false,
+    Default = 1,
+})
+Dropdown_BossDifficulty:OnChanged(function(Value)
+    Config.Boss.Difficulty = Value
+end)
+
+-- [[ Specials Tab ]]
+Tabs.Specials:AddParagraph({
+    Title = "Special Boss Spawners",
+    Content = "Configure auto-spawning for special bosses."
+})
+
+local difficultyLevels = {"Normal", "Hard", "Extreme"}
+
+for bossName, bossData in pairs(Config.Specials) do
+    local Toggle_Special = Tabs.Specials:AddToggle("Special_" .. bossName, {
+        Title = "Auto Spawn " .. bossName,
+        Default = bossData.Auto
+    })
+    Toggle_Special:OnChanged(function(Value)
+        Config.Specials[bossName].Auto = Value
+    end)
+
+    local Dropdown_SpecialDiff = Tabs.Specials:AddDropdown("SpecialDiff_" .. bossName, {
+        Title = bossName .. " Difficulty",
+        Values = difficultyLevels,
+        Multi = false,
+        Default = 1,
+    })
+    Dropdown_SpecialDiff:OnChanged(function(Value)
+        Config.Specials[bossName].Diff = Value
+    end)
+end
+
+-- [[ Settings & SaveManager Integration ]]
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({})
+InterfaceManager:SetFolder("ArcXAutoFarm")
+SaveManager:SetFolder("ArcXAutoFarm/configs")
+
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+-- Auto Load configuration upon executing the script
+SaveManager:LoadAutoloadConfig()
+
+Window:SelectTab(1)
+Fluent:Notify({
+    Title = "ArcX AutoFarm",
+    Content = "Script and UI loaded. Configuration Auto-loaded.",
+    Duration = 5
+})
