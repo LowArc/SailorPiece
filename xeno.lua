@@ -15,6 +15,7 @@ until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstC
 -- ==========================================
 local Config = {
 	LoopFarm = false,
+	AutoRejoin = false,
 	TpTime = 0.1,
 	AutoEquip = false,
 	SelectedWeapon = "", -- Stores the chosen weapon name
@@ -461,6 +462,22 @@ function Utility.EnableAntiAFK()
 	end)
 end
 
+function Utility.EnableAutoRejoin()
+    local TeleportService = game:GetService("TeleportService")
+    local overlay = game:GetService("CoreGui"):WaitForChild("RobloxPromptGui"):WaitForChild("promptOverlay")
+
+    local connection
+    connection = overlay.ChildAdded:Connect(function(v)
+        if v.Name == "ErrorPrompt" then
+            -- /// Check the Config before teleporting ///
+            if _G.FarmConfig.AutoRejoin then
+                connection:Disconnect()
+                TeleportService:Teleport(game.PlaceId)
+            end
+        end
+    end)
+end
+
 function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 	local function onCharacterAdded(char)
 		char:WaitForChild("HumanoidRootPart", 5)
@@ -560,6 +577,7 @@ local Spawner = BossSpawner.new(Tracker, GameRemotes)
 local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRemotes.ObservationHaki)
 
 Utility.EnableAntiAFK()
+Utility.EnableAutoRejoin()
 Utility.SetupCharacterEvents(GameRemotes.Haki, GameRemotes.ObservationHaki)
 Spawner:Start()
 AutoFarm:Start()
@@ -769,6 +787,19 @@ for bossName, bossData in pairs(Config.Specials) do
 		Config.Specials[bossName].Diff = Value
 	end)
 end
+
+-- [[ Settings Tab]]
+Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
+
+local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
+    Title = "Auto Rejoin on Disconnect",
+    Description = "Automatically rejoins the server if you get kicked or lose connection.",
+    Default = Config.AutoRejoin
+})
+
+Toggle_AutoRejoin:OnChanged(function(Value)
+    Config.AutoRejoin = Value
+end)
 
 -- [[ Settings & SaveManager Integration ]]
 SaveManager:SetLibrary(Fluent)
