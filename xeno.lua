@@ -508,8 +508,8 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 local Window = Fluent:CreateWindow({
-    Title = "ArcX AutoFarm",
-    SubTitle = "Integrated UI",
+    Title = "ArcX 💀🥀",
+    SubTitle = "Best Script Of All Time???",
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
@@ -659,8 +659,8 @@ SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({"Dropdown_Weapon"}) -- Don't auto-save weapon list state as it changes
-InterfaceManager:SetFolder("ArcX AutoFarm")
-SaveManager:SetFolder("ArcX AutoFarm/configs")
+InterfaceManager:SetFolder("ArcX")
+SaveManager:SetFolder("ArcX/configs")
 
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
@@ -669,7 +669,7 @@ SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title = "ArcX AutoFarm",
+    Title = "ArcX 🥀💀",
     Content = "Script and UI loaded. Don't forget to refresh and select your weapon!",
     Duration = 5
 })
