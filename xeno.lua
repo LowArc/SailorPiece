@@ -17,6 +17,7 @@ local Config = {
 	LoopFarm = false,
 	AutoRejoin = false,
 	FriendOnly = false,
+	WhiteScreen = false,
 	TpTime = 0.1,
 	AutoEquip = false,
 	SelectedWeapon = "", -- Stores the chosen weapon name
@@ -711,7 +712,7 @@ local Slider_TpTime = Tabs.Main:AddSlider("Slider_TpTime", {
 	Description = "Wait time between teleports",
 	Default = Config.TpTime,
 	Min = 0,
-	Max = 2,
+	Max = 1,
 	Rounding = 1,
 	Callback = function(Value)
 		Config.TpTime = Value
@@ -832,6 +833,25 @@ end
 
 -- [[ Settings Tab]]
 Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
+
+local Toggle_WhiteScreen = Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
+    Title = "WhiteScreen Mode",
+    Description = "Disables 3D Rendering to save CPU/GPU. Screen will freeze/go dark.",
+    Default = Config.WhiteScreen
+})
+
+Toggle_WhiteScreen:OnChanged(function(Value)
+    Config.WhiteScreen = Value
+    game:GetService("RunService"):Set3dRenderingEnabled(not Value)
+    
+    if Value then
+        Fluent:Notify({
+            Title = "ArcX Optimization",
+            Content = "WhiteScreen Mode Active. Enjoy the low CPU usage!",
+            Duration = 3
+        })
+    end
+end)
 
 local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
     Title = "Auto Rejoin on Disconnect",
