@@ -16,6 +16,7 @@ until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstC
 local Config = {
 	LoopFarm = false,
 	AutoRejoin = false,
+	FriendOnly = false,
 	TpTime = 0.1,
 	AutoEquip = false,
 	SelectedWeapon = "", -- Stores the chosen weapon name
@@ -478,6 +479,33 @@ function Utility.EnableAutoRejoin()
     end)
 end
 
+function Utility.EnableFriendCheck()
+    local function checkAndKick(player)
+        if not _G.FarmConfig.FriendOnly or player == LocalPlayer then 
+            return 
+        end
+
+        local isFriend = false
+        local success, result = pcall(function()
+            return LocalPlayer:IsFriendsWith(player.UserId)
+        end)
+
+        if success then isFriend = result end
+
+        if not isFriend then
+            LocalPlayer:Kick("\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nRejoining to find a safe server...")
+        end
+    end
+
+    -- Scan current players
+    for _, player in ipairs(Players:GetPlayers()) do
+        checkAndKick(player)
+    end
+
+    -- Listen for new joins
+    Players.PlayerAdded:Connect(checkAndKick)
+end
+
 function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 	local function onCharacterAdded(char)
 		char:WaitForChild("HumanoidRootPart", 5)
@@ -578,6 +606,7 @@ local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRe
 
 Utility.EnableAntiAFK()
 Utility.EnableAutoRejoin()
+Utility.EnableFriendCheck()
 Utility.SetupCharacterEvents(GameRemotes.Haki, GameRemotes.ObservationHaki)
 Spawner:Start()
 AutoFarm:Start()
@@ -799,6 +828,29 @@ local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
 
 Toggle_AutoRejoin:OnChanged(function(Value)
     Config.AutoRejoin = Value
+end)
+
+local Toggle_FriendOnly = Tabs.Settings:AddToggle("Toggle_FriendOnly", {
+    Title = "Friend-Only Mode (Anti-Stranger)",
+    Description = "Kicks you from the server if a non-friend is present. Works best with Auto-Rejoin.",
+    Default = Config.FriendOnly
+})
+
+Toggle_FriendOnly:OnChanged(function(Value)
+    Config.FriendOnly = Value
+    -- If they turn it on mid-game, run a check immediately
+    if Value then
+        for _, player in ipairs(game.Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                -- This triggers the check logic we wrote in Utility
+                local isFriend = false
+                pcall(function() isFriend = LocalPlayer:IsFriendsWith(player.UserId) end)
+                if not isFriend then 
+                    LocalPlayer:Kick("Friend-Only Mode Enabled: Stranger found.") 
+                end
+            end
+        end
+    end
 end)
 
 -- [[ Settings & SaveManager Integration ]]
