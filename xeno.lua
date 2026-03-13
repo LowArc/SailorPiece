@@ -16,6 +16,8 @@ until LocalPlayer and LocalPlayer.Character and LocalPlayer.Character:FindFirstC
 local Config = {
 	LoopFarm = false,
 	AutoRejoin = false,
+	TimedRejoin = false,
+	RejoinDelay = 10,
 	FriendOnly = false,
 	WhiteScreen = false,
 	TpTime = 0.1,
@@ -110,29 +112,29 @@ local CONSTANTS = {
 		TrueAizen = CFrame.new(-1205, 1604, 1774),
 	},
 	FarmOrder = {
-		{ Name = "Swordsman",        Remote = "Judgement",   IsBossType = false },
-		{ Name = "Quincy",           Remote = "SoulSociety", IsBossType = false },
-		{ Name = "AcademyTeacher",   Remote = "Academy",     IsBossType = false },
-		{ Name = "Slime",            Remote = "Slime",       IsBossType = false },
-		{ Name = "StrongSorcerer",   Remote = "Shinjuku",    IsBossType = false },
-		{ Name = "Hollow",           Remote = "HuecoMundo",  IsBossType = false },
-		{ Name = "Gojo",             Remote = "Shibuya",     IsBossType = true },
-		{ Name = "Yuji",             Remote = "Shibuya",     IsBossType = true },
-		{ Name = "Sukuna",           Remote = "Shibuya",     IsBossType = true },
-		{ Name = "Jinwoo",           Remote = "Sailor",      IsBossType = true },
-		{ Name = "Alucard",          Remote = "Sailor",      IsBossType = true },
-		{ Name = "Aizen",            Remote = "HuecoMundo",  IsBossType = true },
-		{ Name = "Yamato",           Remote = "Judgement",   IsBossType = true },
-		{ Name = "Saber",            Remote = "Boss",        IsBossType = true },
-		{ Name = "Ichigo",           Remote = "Boss",        IsBossType = true },
-		{ Name = "QinShi",           Remote = "Boss",        IsBossType = true },
-		{ Name = "Gilgamesh",        Remote = "Boss",        IsBossType = true },
-		{ Name = "BlessedMaiden",    Remote = "Boss",        IsBossType = true },
-		{ Name = "StrongestinHistory", Remote = "Shinjuku",  IsBossType = true },
-		{ Name = "StrongestofToday", Remote = "Shinjuku",    IsBossType = true },
-		{ Name = "Rimuru",           Remote = "Slime",       IsBossType = true },
-		{ Name = "Anos",             Remote = "Academy",     IsBossType = true },
-		{ Name = "TrueAizen",        Remote = "SoulSociety", IsBossType = true },
+		{ Name = "Swordsman",          Remote = "Judgement",   IsBossType = false },
+		{ Name = "Quincy",             Remote = "SoulSociety", IsBossType = false },
+		{ Name = "AcademyTeacher",     Remote = "Academy",     IsBossType = false },
+		{ Name = "Slime",              Remote = "Slime",       IsBossType = false },
+		{ Name = "StrongSorcerer",     Remote = "Shinjuku",    IsBossType = false },
+		{ Name = "Hollow",             Remote = "HuecoMundo",  IsBossType = false },
+		{ Name = "Gojo",               Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Yuji",               Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Sukuna",             Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Jinwoo",             Remote = "Sailor",      IsBossType = true },
+		{ Name = "Alucard",            Remote = "Sailor",      IsBossType = true },
+		{ Name = "Aizen",              Remote = "HuecoMundo",  IsBossType = true },
+		{ Name = "Yamato",             Remote = "Judgement",   IsBossType = true },
+		{ Name = "Saber",              Remote = "Boss",        IsBossType = true },
+		{ Name = "Ichigo",             Remote = "Boss",        IsBossType = true },
+		{ Name = "QinShi",             Remote = "Boss",        IsBossType = true },
+		{ Name = "Gilgamesh",          Remote = "Boss",        IsBossType = true },
+		{ Name = "BlessedMaiden",      Remote = "Boss",        IsBossType = true },
+		{ Name = "StrongestinHistory", Remote = "Shinjuku",    IsBossType = true },
+		{ Name = "StrongestofToday",   Remote = "Shinjuku",    IsBossType = true },
+		{ Name = "Rimuru",             Remote = "Slime",       IsBossType = true },
+		{ Name = "Anos",               Remote = "Academy",     IsBossType = true },
+		{ Name = "TrueAizen",          Remote = "SoulSociety", IsBossType = true },
 	},
 }
 
@@ -158,20 +160,19 @@ function EntityTracker:Register(npc)
 		if humanoid and humanoid.Health > 0 then
 			self.Active[npc] = true
 
-			-- FIX: declare both upfront so each can reference the other for mutual cleanup
 			local deathConn, removeConn
 
 			deathConn = humanoid.Died:Connect(function()
 				self.Active[npc] = nil
 				deathConn:Disconnect()
-				removeConn:Disconnect() -- FIX: was never disconnected before
+				removeConn:Disconnect()
 			end)
 
 			removeConn = npc.AncestryChanged:Connect(function(_, parent)
 				if not parent then
 					self.Active[npc] = nil
 					removeConn:Disconnect()
-					deathConn:Disconnect() -- FIX: guard removed, both always valid here
+					deathConn:Disconnect()
 				end
 			end)
 		end
@@ -182,14 +183,12 @@ function EntityTracker:Init()
 	for _, child in ipairs(self.Folder:GetChildren()) do
 		self:Register(child)
 	end
-	-- FIX: store the ChildAdded connection so it can be cleaned up later
 	local conn = self.Folder.ChildAdded:Connect(function(child)
 		self:Register(child)
 	end)
 	table.insert(self.Connections, conn)
 end
 
--- FIX: Added Destroy method to clean up all stored connections
 function EntityTracker:Destroy()
 	for _, conn in ipairs(self.Connections) do
 		conn:Disconnect()
@@ -202,7 +201,6 @@ function EntityTracker:IsAlive(queryName, isBossType, requiredCount)
 	requiredCount = requiredCount or 5
 	local currentCount = 0
 
-	-- FIX: collect stale refs first, then clean — never modify a table during pairs() iteration
 	local stale = {}
 	for npc, _ in pairs(self.Active) do
 		if not (npc and npc.Parent) then
@@ -241,7 +239,7 @@ function BossSpawner.new(tracker, remotes)
 		Tracker = tracker,
 		Remotes = remotes,
 		StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" },
-		_running = false, -- FIX: cancellation flag
+		_running = false,
 	}, BossSpawner)
 end
 
@@ -250,7 +248,6 @@ function BossSpawner:Stop()
 end
 
 function BossSpawner:Start()
-	-- FIX: prevent duplicate loops on re-execution
 	if self._running then return end
 	self._running = true
 
@@ -305,7 +302,10 @@ function Farmer.new(tracker, tpRemote, abilityRemote, obsHakiRemote, hakiRemote)
 		ObsHakiRemote = obsHakiRemote,
 		HakiRemote = hakiRemote,
 		LastSkillTime = 0,
-		_running = false, -- FIX: cancellation flag
+		-- FIX: per-slot equip throttle so EquipWeapon doesn't call EquipTool every tick
+		LastEquipTime_NPC = 0,
+		LastEquipTime_Boss = 0,
+		_running = false,
 	}, Farmer)
 end
 
@@ -317,8 +317,18 @@ function Farmer:EquipWeapon(isBoss)
 	local cfg = _G.FarmConfig
 	if not cfg.AutoEquip then return end
 
+	-- FIX: throttle — only attempt equip once per second per slot
+	local now = tick()
+	if isBoss then
+		if now - self.LastEquipTime_Boss < 1 then return end
+		self.LastEquipTime_Boss = now
+	else
+		if now - self.LastEquipTime_NPC < 1 then return end
+		self.LastEquipTime_NPC = now
+	end
+
 	local weaponName = isBoss and cfg.SelectedWeapon_Boss or cfg.SelectedWeapon_NPC
-	if weaponName == "" or weaponName == "None" then return end
+	local dropdownId  = isBoss and "Dropdown_WeaponBoss" or "Dropdown_WeaponNPC"
 
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -327,9 +337,36 @@ function Farmer:EquipWeapon(isBoss)
 	local backpack = LocalPlayer:FindFirstChild("Backpack")
 	if not hum or hum.Health <= 0 or not backpack then return end
 
-	-- FIX: if the tool is already equipped in the character, do nothing.
-	-- Calling Activate() on a tool that isn't actively held spams warnings every tick.
-	-- Equipping is all that's needed — the game handles combat automatically.
+	if weaponName == "None" or weaponName == "" then
+		-- Priority 1: check if there is already a tool equipped in the character
+		local equippedTool = char:FindFirstChildOfClass("Tool")
+
+		if equippedTool then
+			-- Already holding something — just sync config + dropdown to reflect it
+			if isBoss then cfg.SelectedWeapon_Boss = equippedTool.Name
+			else cfg.SelectedWeapon_NPC = equippedTool.Name end
+			pcall(function()
+				Fluent.Options[dropdownId]:SetValue(equippedTool.Name)
+			end)
+			return
+		end
+
+		-- Priority 2: nothing equipped — grab the first tool from backpack
+		local firstTool = backpack:FindFirstChildOfClass("Tool")
+		if not firstTool then return end
+
+		hum:EquipTool(firstTool)
+
+		if isBoss then cfg.SelectedWeapon_Boss = firstTool.Name
+		else cfg.SelectedWeapon_NPC = firstTool.Name end
+
+		pcall(function()
+			Fluent.Options[dropdownId]:SetValue(firstTool.Name)
+		end)
+		return
+	end
+
+	-- Specific weapon selected — skip if already in hand
 	if char:FindFirstChild(weaponName) then return end
 
 	local tool = backpack:FindFirstChild(weaponName)
@@ -394,7 +431,6 @@ function Farmer:CastSkills(isBoss)
 	self.LastSkillTime = tick()
 	local activeSkills = isBoss and cfg.AutoSkill.BossSkills or cfg.AutoSkill.NPCSkills
 
-	-- FIX: removed per-skill task.spawn — direct pcall is sufficient and avoids coroutine churn
 	for skillName, isEnabled in pairs(activeSkills) do
 		if isEnabled then
 			local skillId = cfg.AutoSkill.SkillIds[skillName]
@@ -408,7 +444,6 @@ function Farmer:CastSkills(isBoss)
 end
 
 function Farmer:Start()
-	-- FIX: prevent duplicate loops on re-execution
 	if self._running then return end
 	self._running = true
 
@@ -421,7 +456,7 @@ function Farmer:Start()
 
 			self:CheckObservationHaki()
 			self:CheckArmamentHaki()
-			self:EquipWeapon()
+			self:EquipWeapon(false)
 
 			local char = LocalPlayer.Character
 			local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -465,29 +500,33 @@ function Farmer:Start()
 							local currentChar = LocalPlayer.Character
 							local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
 
-							if currentHrp then
-								local liveBoss = nil
-								for npc, _ in pairs(self.Tracker.Active) do
-									if npc.Name:find("^" .. target.Name) and npc:FindFirstChild("HumanoidRootPart") then
-										liveBoss = npc.HumanoidRootPart
-										break
-									end
-								end
+							-- FIX: if character is dead/respawning, wait instead of hard-stalling
+							if not currentHrp then
+								task.wait(1)
+								continue
+							end
 
-								local targetGoal = liveBoss and liveBoss.CFrame or spawnCF
-								local distance = (currentHrp.Position - targetGoal.Position).Magnitude
-								local lookAtPos = targetGoal.Position
-
-								if distance > 20 then
-									if distance > 150 and target.Remote then
-										self.TpRemote:FireServer(target.Remote)
-										task.wait(0.5)
-									end
-									currentHrp.CFrame = CFrame.lookAt(targetGoal.Position + Vector3.new(0, 0, 3), lookAtPos)
-									task.wait(cfg.TpTime or 0.5)
-								else
-									currentHrp.CFrame = CFrame.lookAt(currentHrp.Position, lookAtPos)
+							local liveBoss = nil
+							for npc, _ in pairs(self.Tracker.Active) do
+								if npc.Name:find("^" .. target.Name) and npc:FindFirstChild("HumanoidRootPart") then
+									liveBoss = npc.HumanoidRootPart
+									break
 								end
+							end
+
+							local targetGoal = liveBoss and liveBoss.CFrame or spawnCF
+							local distance = (currentHrp.Position - targetGoal.Position).Magnitude
+							local lookAtPos = targetGoal.Position
+
+							if distance > 20 then
+								if distance > 150 and target.Remote then
+									self.TpRemote:FireServer(target.Remote)
+									task.wait(0.5)
+								end
+								currentHrp.CFrame = CFrame.lookAt(targetGoal.Position + Vector3.new(0, 0, 3), lookAtPos)
+								task.wait(cfg.TpTime or 0.5)
+							else
+								currentHrp.CFrame = CFrame.lookAt(currentHrp.Position, lookAtPos)
 							end
 
 							task.wait(cfg.TpTime)
@@ -503,14 +542,20 @@ function Farmer:Start()
 							and not cfg.IgnoredEntities[target.Name]
 							and self.Tracker:IsAlive(target.Name, false, 1)
 						do
-							local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-							if currentHrp then
-								self:CheckObservationHaki()
-								self:CheckArmamentHaki()
-								self:EquipWeapon(false)
-								self:CastSkills(false)
-								currentHrp.CFrame = spawnCF
+							local currentChar = LocalPlayer.Character
+							local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
+
+							-- FIX: same dead-character guard for NPC loop
+							if not currentHrp then
+								task.wait(1)
+								continue
 							end
+
+							self:CheckObservationHaki()
+							self:CheckArmamentHaki()
+							self:EquipWeapon(false)
+							self:CastSkills(false)
+							currentHrp.CFrame = spawnCF
 							task.wait(cfg.TpTime)
 						end
 					end
@@ -525,15 +570,12 @@ end
 -- ==========================================
 local Utility = {}
 
--- FIX: store all connections in a table for cleanup on re-execution
 local _utilityConnections = {}
 
 function Utility.EnableAntiAFK()
-	if _G.AntiAFK_Enabled then return end
-	_G.AntiAFK_Enabled = true
-
+	-- FIX: removed _G.AntiAFK_Enabled guard — Cleanup() is always called first,
+	-- so the old connection is already disconnected before this runs.
 	local VirtualUser = game:GetService("VirtualUser")
-	-- FIX: store the connection so it can be disconnected later
 	local conn = LocalPlayer.Idled:Connect(function()
 		VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
 		task.wait(1)
@@ -546,31 +588,69 @@ function Utility.EnableAutoRejoin()
 	local TeleportService = game:GetService("TeleportService")
 	local GuiService = game:GetService("GuiService")
 
-	-- FIX: store connection for cleanup
-	local conn = GuiService.ErrorMessageChanged:Connect(function()
+	-- This handles the standard "You have been disconnected" popup
+	GuiService.ErrorMessageChanged:Connect(function()
 		local cfg = _G.FarmConfig
 		if not cfg.AutoRejoin then return end
 
+		-- Check if it's a kick from your own FriendCheck
 		local lastError = GuiService:GetErrorMessage()
 		if string.find(lastError, "ArcX Security") then
 			warn("Auto-Rejoin blocked: Security Kick.")
 			return
 		end
 
-		-- FIX: replaced deprecated spawn() with task.spawn()
-		-- FIX: added a finite retry limit to prevent a truly infinite leak
-		task.spawn(function()
-			local maxRetries = 10
-			for i = 1, maxRetries do
-				local success = pcall(function()
-					TeleportService:Teleport(game.PlaceId, LocalPlayer)
-				end)
-				if success then break end
+		-- Internet Outage Protection Loop
+		spawn(function()
+			while true do
+				TeleportService:Teleport(game.PlaceId, LocalPlayer)
 				task.wait(10)
 			end
 		end)
 	end)
-	table.insert(_utilityConnections, conn)
+end
+
+-- ── Timed rejoin (completely separate function) ───────────────────────────────
+function Utility.EnableTimedRejoin()
+	local TeleportService = game:GetService("TeleportService")
+
+	-- Ticks every second so toggle/slider changes take effect immediately.
+	-- elapsed resets to 0 whenever TimedRejoin is off.
+	task.spawn(function()
+		local elapsed = 0
+		while true do
+			task.wait(1)
+			local cfg = _G.FarmConfig
+
+			if not cfg.TimedRejoin then
+				elapsed = 0
+				continue
+			end
+
+			elapsed = elapsed + 1
+			local target = (cfg.RejoinDelay or 10) * 60
+
+			if elapsed > target then elapsed = target end
+
+			if elapsed >= target then
+				elapsed = 0
+
+				pcall(function()
+					Fluent:Notify({
+						Title = "ArcX Timed Rejoin",
+						Content = "Rejoining now (" .. (cfg.RejoinDelay or 10) .. " min timer)...",
+						Duration = 5,
+					})
+				end)
+				task.wait(5)
+
+				for i = 1, 10 do
+					if pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end) then break end
+					task.wait(10)
+				end
+			end
+		end
+	end)
 end
 
 function Utility.EnableFriendCheck()
@@ -594,7 +674,6 @@ function Utility.EnableFriendCheck()
 		checkAndKick(player)
 	end
 
-	-- FIX: store the PlayerAdded connection
 	local conn = Players.PlayerAdded:Connect(checkAndKick)
 	table.insert(_utilityConnections, conn)
 end
@@ -629,7 +708,6 @@ function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 		end
 	end
 
-	-- FIX: store CharacterAdded connection
 	local conn = LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
 	table.insert(_utilityConnections, conn)
 
@@ -638,13 +716,11 @@ function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 	end
 end
 
--- FIX: centralized cleanup to prevent duplicate listeners on re-execution
 function Utility.Cleanup()
 	for _, conn in ipairs(_utilityConnections) do
 		conn:Disconnect()
 	end
 	_utilityConnections = {}
-	_G.AntiAFK_Enabled = nil
 end
 
 function Utility.GetWeapons()
@@ -672,44 +748,49 @@ end
 -- || EXECUTION
 -- ==========================================
 
--- FIX: stop any previous script instances before starting new ones
+-- Stop previous instances cleanly
 if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop() end
-if _G.ArcX_Farmer then _G.ArcX_Farmer:Stop() end
+if _G.ArcX_Farmer  then _G.ArcX_Farmer:Stop() end
 if _G.ArcX_Tracker then _G.ArcX_Tracker:Destroy() end
 Utility.Cleanup()
 
+-- FIX: destroy the old Fluent window before creating a new one,
+-- so re-executing the script doesn't stack multiple windows.
+if _G.ArcX_Window then
+	pcall(function() _G.ArcX_Window:Destroy() end)
+	_G.ArcX_Window = nil
+end
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Remotes      = ReplicatedStorage:WaitForChild("Remotes")
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local AbilityRemote =
 	ReplicatedStorage:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility")
 
 local GameRemotes = {
-	Teleport = Remotes:WaitForChild("TeleportToPortal"),
-	SummonBoss = Remotes:WaitForChild("RequestSummonBoss"),
+	Teleport       = Remotes:WaitForChild("TeleportToPortal"),
+	SummonBoss     = Remotes:WaitForChild("RequestSummonBoss"),
 	SpawnStrongest = Remotes:WaitForChild("RequestSpawnStrongestBoss"),
-	Anos = Remotes:WaitForChild("RequestSpawnAnosBoss"),
-	TrueAizen = RemoteEvents:WaitForChild("RequestSpawnTrueAizen"),
-	Rimuru = RemoteEvents:WaitForChild("RequestSpawnRimuru"),
-	Haki = RemoteEvents:WaitForChild("HakiRemote"),
-	ObservationHaki = RemoteEvents:WaitForChild("ObservationHakiRemote"),
+	Anos           = Remotes:WaitForChild("RequestSpawnAnosBoss"),
+	TrueAizen      = RemoteEvents:WaitForChild("RequestSpawnTrueAizen"),
+	Rimuru         = RemoteEvents:WaitForChild("RequestSpawnRimuru"),
+	Haki           = RemoteEvents:WaitForChild("HakiRemote"),
+	ObservationHaki= RemoteEvents:WaitForChild("ObservationHakiRemote"),
 }
 
-local Tracker = EntityTracker.new(workspace:WaitForChild("NPCs"))
-local Spawner = BossSpawner.new(Tracker, GameRemotes)
+local Tracker  = EntityTracker.new(workspace:WaitForChild("NPCs"))
+local Spawner  = BossSpawner.new(Tracker, GameRemotes)
 local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRemotes.ObservationHaki, GameRemotes.Haki)
 
--- FIX: store instances globally so the next re-execution can stop them cleanly
 _G.ArcX_Tracker = Tracker
 _G.ArcX_Spawner = Spawner
-_G.ArcX_Farmer = AutoFarm
+_G.ArcX_Farmer  = AutoFarm
 
 Utility.EnableAntiAFK()
 Utility.EnableAutoRejoin()
+Utility.EnableTimedRejoin()
 Utility.EnableFriendCheck()
 Utility.SetupCharacterEvents(GameRemotes.Haki, GameRemotes.ObservationHaki)
-Spawner:Start()
-AutoFarm:Start()
 
 print("ArcX AutoFarm Initialized Successfully.")
 
@@ -717,11 +798,8 @@ print("ArcX AutoFarm Initialized Successfully.")
 -- || UI INTEGRATION (FLUENT & SAVEMANAGER)
 -- ==========================================
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager =
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(
-	game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
-)()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
 local Window = Fluent:CreateWindow({
 	Title = "ArcX 💀🥀 | ",
@@ -733,17 +811,19 @@ local Window = Fluent:CreateWindow({
 	MinimizeKey = Enum.KeyCode.LeftControl,
 })
 
+-- FIX: store window globally so it can be destroyed on re-execution
+_G.ArcX_Window = Window
+
 local Tabs = {
-	Main = Window:AddTab({ Title = "Main", Icon = "home" }),
-	Mobs = Window:AddTab({ Title = "Entities", Icon = "swords" }),
-	Bosses = Window:AddTab({ Title = "Standard Bosses", Icon = "skull" }),
-	Specials = Window:AddTab({ Title = "Special Bosses", Icon = "star" }),
-	Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+	Main     = Window:AddTab({ Title = "Main",             Icon = "home"     }),
+	Mobs     = Window:AddTab({ Title = "Entities",         Icon = "swords"   }),
+	Bosses   = Window:AddTab({ Title = "Standard Bosses",  Icon = "skull"    }),
+	Specials = Window:AddTab({ Title = "Special Bosses",   Icon = "star"     }),
+	Settings = Window:AddTab({ Title = "Settings",         Icon = "settings" }),
 }
 
 -- [[ Main Tab ]]
-local Toggle_LoopFarm =
-	Tabs.Main:AddToggle("Toggle_LoopFarm", { Title = "Enable Auto Farm", Default = Config.LoopFarm })
+local Toggle_LoopFarm = Tabs.Main:AddToggle("Toggle_LoopFarm", { Title = "Enable Auto Farm", Default = Config.LoopFarm })
 Toggle_LoopFarm:OnChanged(function(Value)
 	Config.LoopFarm = Value
 end)
@@ -760,16 +840,12 @@ local Slider_TpTime = Tabs.Main:AddSlider("Slider_TpTime", {
 	end,
 })
 
-local Toggle_AutoHaki =
-	Tabs.Main:AddToggle("Toggle_AutoHaki", { Title = "Auto Armament Haki", Default = Config.AutoHaki })
+local Toggle_AutoHaki = Tabs.Main:AddToggle("Toggle_AutoHaki", { Title = "Auto Armament Haki", Default = Config.AutoHaki })
 Toggle_AutoHaki:OnChanged(function(Value)
 	Config.AutoHaki = Value
 end)
 
-local Toggle_AutoObsHaki = Tabs.Main:AddToggle(
-	"Toggle_AutoObsHaki",
-	{ Title = "Auto Observation Haki", Default = Config.AutoObservationHaki }
-)
+local Toggle_AutoObsHaki = Tabs.Main:AddToggle("Toggle_AutoObsHaki", { Title = "Auto Observation Haki", Default = Config.AutoObservationHaki })
 Toggle_AutoObsHaki:OnChanged(function(Value)
 	Config.AutoObservationHaki = Value
 end)
@@ -777,29 +853,27 @@ end)
 -- Auto Equip & Weapon Selection
 Tabs.Main:AddParagraph({ Title = "Inventory Management", Content = "Pick different weapons for different targets." })
 
-local Toggle_AutoEquip =
-	Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
+local Toggle_AutoEquip = Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
 Toggle_AutoEquip:OnChanged(function(Value)
 	Config.AutoEquip = Value
 end)
 
-local Dropdown_WeaponNPC = Tabs.Main:AddDropdown("Dropdown_WeaponNPC", {
+-- FIX: declared without `local` so EquipWeapon() can reference them via Fluent.Options[id]
+Tabs.Main:AddDropdown("Dropdown_WeaponNPC", {
 	Title = "Weapon for NPCs",
 	Values = Utility.GetWeapons(),
 	Multi = false,
-	Default = Config.SelectedWeapon_NPC or 1,
-})
-Dropdown_WeaponNPC:OnChanged(function(Value)
+	Default = Config.SelectedWeapon_NPC,
+}):OnChanged(function(Value)
 	Config.SelectedWeapon_NPC = Value
 end)
 
-local Dropdown_WeaponBoss = Tabs.Main:AddDropdown("Dropdown_WeaponBoss", {
+Tabs.Main:AddDropdown("Dropdown_WeaponBoss", {
 	Title = "Weapon for Bosses",
 	Values = Utility.GetWeapons(),
 	Multi = false,
-	Default = Config.SelectedWeapon_Boss or 1,
-})
-Dropdown_WeaponBoss:OnChanged(function(Value)
+	Default = Config.SelectedWeapon_Boss,
+}):OnChanged(function(Value)
 	Config.SelectedWeapon_Boss = Value
 end)
 
@@ -807,16 +881,16 @@ Tabs.Main:AddButton({
 	Title = "Refresh Weapon Lists",
 	Callback = function()
 		local weapons = Utility.GetWeapons()
-		Dropdown_WeaponNPC:SetValues(weapons)
-		Dropdown_WeaponBoss:SetValues(weapons)
+		-- FIX: use Fluent.Options to properly update both the values list and displayed value
+		Fluent.Options["Dropdown_WeaponNPC"]:SetValues(weapons)
+		Fluent.Options["Dropdown_WeaponBoss"]:SetValues(weapons)
 	end,
 })
 
 -- [[ Main Tab: Auto Skills ]]
 Tabs.Main:AddParagraph({ Title = "Auto Skills", Content = "Automatically cast selected skills during combat." })
 
-local Toggle_AutoSkillBoss =
-	Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
+local Toggle_AutoSkillBoss = Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
 Toggle_AutoSkillBoss:OnChanged(function(Value)
 	Config.AutoSkill.Bosses = Value
 end)
@@ -831,8 +905,7 @@ Dropdown_BossSkills:OnChanged(function(Value)
 	Config.AutoSkill.BossSkills = Value
 end)
 
-local Toggle_AutoSkillNPC =
-	Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
+local Toggle_AutoSkillNPC = Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
 Toggle_AutoSkillNPC:OnChanged(function(Value)
 	Config.AutoSkill.NPCs = Value
 end)
@@ -896,8 +969,7 @@ for _, category in ipairs(EntityCategories) do
 end
 
 -- [[ Bosses Tab ]]
-local Toggle_AutoSpawn =
-	Tabs.Bosses:AddToggle("Toggle_AutoSpawn", { Title = "Auto-Spawn Bosses", Default = Config.Boss.AutoSpawn })
+local Toggle_AutoSpawn = Tabs.Bosses:AddToggle("Toggle_AutoSpawn", { Title = "Auto-Spawn Bosses", Default = Config.Boss.AutoSpawn })
 Toggle_AutoSpawn:OnChanged(function(Value)
 	Config.Boss.AutoSpawn = Value
 end)
@@ -968,11 +1040,34 @@ end)
 
 local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
 	Title = "Auto Rejoin on Disconnect",
-	Description = "Automatically rejoins the server if you get kicked or lose connection.",
+	Description = "Automatically rejoins if you get kicked or lose connection.",
 	Default = Config.AutoRejoin,
 })
 Toggle_AutoRejoin:OnChanged(function(Value)
 	Config.AutoRejoin = Value
+end)
+
+Tabs.Settings:AddSection("Timed Auto Rejoin")
+
+local Toggle_TimedRejoin = Tabs.Settings:AddToggle("Toggle_TimedRejoin", {
+	Title = "Timed Auto Rejoin",
+	Description = "Automatically rejoin the server every X minutes.",
+	Default = Config.TimedRejoin,
+})
+Toggle_TimedRejoin:OnChanged(function(Value)
+	Config.TimedRejoin = Value
+end)
+
+local Slider_RejoinDelay = Tabs.Settings:AddSlider("Slider_RejoinDelay", {
+	Title = "Rejoin Interval (minutes)",
+	Description = "How long to wait before rejoining. Requires Timed Auto Rejoin ON.",
+	Default = Config.RejoinDelay,
+	Min = 1,
+	Max = 120,
+	Rounding = 0,
+})
+Slider_RejoinDelay:OnChanged(function(Value)
+	Config.RejoinDelay = Value
 end)
 
 local Toggle_FriendOnly = Tabs.Settings:AddToggle("Toggle_FriendOnly", {
@@ -1001,8 +1096,7 @@ end)
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
--- FIX: corrected ignore indexes to match the actual dropdown IDs
-SaveManager:SetIgnoreIndexes({ "Dropdown_WeaponNPC", "Dropdown_WeaponBoss" })
+
 InterfaceManager:SetFolder("ArcX")
 SaveManager:SetFolder("ArcX/configs")
 
@@ -1011,6 +1105,11 @@ SaveManager:BuildConfigSection(Tabs.Settings)
 
 SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
+
+-- FIX: start loops AFTER Fluent is fully loaded so EquipWeapon can safely
+-- reference Fluent.Options without it being nil on the first equip attempt.
+Spawner:Start()
+AutoFarm:Start()
 
 Fluent:Notify({
 	Title = "ArcX 💀🥀",
