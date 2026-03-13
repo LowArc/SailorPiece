@@ -19,8 +19,10 @@ local Config = {
 	FriendOnly = false,
 	WhiteScreen = false,
 	TpTime = 0.1,
+	NPCAttackThreshold = 5,
 	AutoEquip = false,
-	SelectedWeapon = "", -- Stores the chosen weapon name
+	SelectedWeapon_NPC = "None",  
+    SelectedWeapon_Boss = "None",
 	AutoHaki = false,
 	AutoObservationHaki = false,
 	IgnoredEntities = {
@@ -62,14 +64,17 @@ local Config = {
 		Anos = { Auto = false, Diff = "Normal" },
 	},
 	AutoSkill = {
-		Enabled = true,
-		Skills = {
-			Z = { Id = 1, Enabled = false },
-			X = { Id = 2, Enabled = false },
-			C = { Id = 3, Enabled = false },
-			V = { Id = 4, Enabled = false },
-			F = { Id = 5, Enabled = false },
-		},
+        Bosses = false,
+        NPCs = false,
+        BossSkills = {}, -- Stores multi-dropdown values for Bosses
+        NPCSkills = {},  -- Stores multi-dropdown values for NPCs
+        SkillIds = { -- Maps the string to the ID
+            Z = 1,
+            X = 2,
+            C = 3,
+            V = 4,
+            F = 5,
+        },
 	},
 }
 
@@ -262,85 +267,131 @@ end
 local Farmer = {}
 Farmer.__index = Farmer
 
-function Farmer.new(tracker, tpRemote, abilityRemote, obsHakiRemote)
+function Farmer.new(tracker, tpRemote, abilityRemote, obsHakiRemote, hakiRemote)
 	return setmetatable({
 		Tracker = tracker,
 		TpRemote = tpRemote,
 		AbilityRemote = abilityRemote,
 		ObsHakiRemote = obsHakiRemote,
+		HakiRemote = hakiRemote,
 		LastSkillTime = 0,
 	}, Farmer)
 end
 
-function Farmer:EquipWeapon()
-	local cfg = _G.FarmConfig
-	if not cfg.AutoEquip or cfg.SelectedWeapon == "" or cfg.SelectedWeapon == "None" then
-		return
-	end
+function Farmer:EquipWeapon(isBoss)
+    local cfg = _G.FarmConfig
+    if not cfg.AutoEquip then return end
 
-	local char = LocalPlayer.Character
-	if not char then
-		return
-	end
+    -- Determine which weapon to use based on the target type
+    local weaponName = isBoss and cfg.SelectedWeapon_Boss or cfg.SelectedWeapon_NPC
+    
+    if weaponName == "" or weaponName == "None" then
+        return
+    end
 
-	local hum = char:FindFirstChild("Humanoid")
-	local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local char = LocalPlayer.Character
+    if not char then return end
 
-	if not hum or hum.Health <= 0 or not backpack then
-		return
-	end
+    local hum = char:FindFirstChild("Humanoid")
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
 
-	local tool = char:FindFirstChild(cfg.SelectedWeapon)
-	if not tool then
-		tool = backpack:FindFirstChild(cfg.SelectedWeapon)
-		if tool then
-			hum:EquipTool(tool)
-		end
-	else
-		-- If equipped, auto attack!
-		pcall(function()
-			tool:Activate()
-		end)
-	end
+    if not hum or hum.Health <= 0 or not backpack then return end
+
+    local tool = char:FindFirstChild(weaponName)
+    if not tool then
+        tool = backpack:FindFirstChild(weaponName)
+        if tool then
+            hum:EquipTool(tool)
+        end
+    else
+        pcall(function()
+            tool:Activate()
+        end)
+    end
+end
+
+function Farmer:CheckArmamentHaki()
+    local cfg = _G.FarmConfig
+    if not cfg.AutoHaki then return end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    -- Check for R15 Hand or R6 Arm
+    local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
+    
+    -- Check if the color is "Really black"
+    local isHakiActive = false
+    if rightArm and rightArm.BrickColor == BrickColor.new("Really black") then
+        isHakiActive = true
+    end
+
+    -- If not black, it means Haki is OFF
+    if not isHakiActive then
+        -- Debounce to prevent spamming the remote
+        if not self.LastArmamentToggle or (tick() - self.LastArmamentToggle > 3) then
+            self.LastArmamentToggle = tick()
+                
+			pcall(function()
+				self.HakiRemote:FireServer("Toggle")
+			end)
+        end
+    end
 end
 
 function Farmer:CheckObservationHaki()
-	local cfg = _G.FarmConfig
-	if not cfg.AutoObservationHaki then
-		return
-	end
+    local cfg = _G.FarmConfig
+    if not cfg.AutoObservationHaki then return end
 
-	local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-	if not playerGui then
-		return
-	end
+    if self.LastObsToggle and (tick() - self.LastObsToggle < 3) then return end
 
-	-- 1. Check if it's on Cooldown
-	local cdUI = playerGui:FindFirstChild("CooldownUI")
-	if cdUI then
-		local cdMain = cdUI:FindFirstChild("MainFrame")
-		if cdMain and cdMain:FindFirstChild("Cooldown_ObsHaki_Observation") then
-			-- Cooldown exists, do not fire remote
-			return
-		end
-	end
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    local dodgeUI = playerGui and playerGui:FindFirstChild("DodgeCounterUI")
+    
+    -- Precise check: Is the UI active and visible?
+    local isVisible = false
+    if dodgeUI and dodgeUI:FindFirstChild("MainFrame") then
+        isVisible = dodgeUI.MainFrame.Visible
+    end
 
-	-- 2. Check if the Dodge UI is already visible
-	local dodgeUI = playerGui:FindFirstChild("DodgeCounterUI")
-	local isVisible = false
-	if dodgeUI then
-		local mainFrame = dodgeUI:FindFirstChild("MainFrame")
-		if mainFrame and mainFrame.Visible then
-			isVisible = true
-		end
-	end
+    -- Check if on cooldown
+    local cdUI = playerGui and playerGui:FindFirstChild("CooldownUI")
+    local onCooldown = false
+    if cdUI and cdUI:FindFirstChild("MainFrame") and cdUI.MainFrame:FindFirstChild("Cooldown_ObsHaki_Observation") then
+        onCooldown = true
+    end
 
-	-- 3. If no cooldown and not visible, toggle it on
-	if not isVisible then
-		pcall(function()
-			self.ObsHakiRemote:FireServer("Toggle")
-		end)
-	end
+    if not isVisible and not onCooldown then
+        self.LastObsToggle = tick()
+        pcall(function()
+            self.ObsHakiRemote:FireServer("Toggle")
+        end)
+    end
+end
+
+function Farmer:CastSkills(isBoss)
+    local cfg = _G.FarmConfig
+    
+    local shouldCast = isBoss and cfg.AutoSkill.Bosses or (not isBoss and cfg.AutoSkill.NPCs)
+    if shouldCast and (tick() - self.LastSkillTime > 0.1) then
+        self.LastSkillTime = tick()
+        
+        -- Choose the correct skill list based on target type
+        local activeSkills = isBoss and cfg.AutoSkill.BossSkills or cfg.AutoSkill.NPCSkills
+        
+        for skillName, isEnabled in pairs(activeSkills) do
+            if isEnabled then
+                local skillId = cfg.AutoSkill.SkillIds[skillName]
+                if skillId then
+                    task.spawn(function()
+                        pcall(function()
+                            self.AbilityRemote:FireServer(skillId)
+                        end)
+                    end)
+                end
+            end
+        end
+    end
 end
 
 function Farmer:Start()
@@ -352,6 +403,7 @@ function Farmer:Start()
 			end
 
 			self:CheckObservationHaki()
+			self:CheckArmamentHaki()
 			self:EquipWeapon()
 
 			local char = LocalPlayer.Character
@@ -368,7 +420,9 @@ function Farmer:Start()
 					continue
 				end
 
-				if not self.Tracker:IsAlive(target.Name, target.IsBossType, 5) then
+				local requiredToStart = target.IsBossType and 1 or cfg.NPCAttackThreshold
+
+				if not self.Tracker:IsAlive(target.Name, target.IsBossType, requiredToStart) then
 					continue
 				end
 
@@ -386,7 +440,8 @@ function Farmer:Start()
 							and self.Tracker:IsAlive(target.Name, true)
 						do
 							self:CheckObservationHaki()
-							self:EquipWeapon()
+							self:EquipWeapon(true)
+							self:CastSkills(true)
 
 							local currentChar = LocalPlayer.Character
 							local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
@@ -403,42 +458,45 @@ function Farmer:Start()
 								local targetGoal = liveBoss and liveBoss.CFrame or spawnCF
 								local distance = (currentHrp.Position - targetGoal.Position).Magnitude
 
+								-- Logic: Always face the boss if it exists, otherwise face the spawn point
+								local lookAtPos = targetGoal.Position
+								
 								if distance > 20 then
 									if distance > 150 and target.Remote then
 										self.TpRemote:FireServer(target.Remote)
 										task.wait(0.5)
 									end
 
-									currentHrp.CFrame = targetGoal * CFrame.new(0, 0, 3)
-									task.wait(cfg.TpTime + 0.5)
+									-- Teleport to the boss and look at it
+									currentHrp.CFrame = CFrame.lookAt(targetGoal.Position + Vector3.new(0, 0, 3), lookAtPos)
+									task.wait(cfg.TpTime or 0.5)
+								else
+									-- Even if we are close enough, continuously update rotation to look at the boss
+									currentHrp.CFrame = CFrame.lookAt(currentHrp.Position, lookAtPos)
 								end
 
-								if cfg.AutoSkill.Enabled and (tick() - self.LastSkillTime > 0.1) then
-									self.LastSkillTime = tick()
-									for key, skillData in pairs(cfg.AutoSkill.Skills) do
-										if skillData.Enabled then
-											task.spawn(function()
-												pcall(function()
-													self.AbilityRemote:FireServer(skillData.Id)
-												end)
-											end)
-										end
-									end
-								end
+								
 							end
-							task.wait(0.1)
+							task.wait(cfg.TpTime)
 						end
 					else
 						if target.Remote then
-							self.TpRemote:FireServer(target.Remote)
-						end
+                            self.TpRemote:FireServer(target.Remote)
+                        end
 
-						local currentHrp = LocalPlayer.Character
-							and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-						if currentHrp then
-							currentHrp.CFrame = spawnCF
-							task.wait(cfg.TpTime)
-						end
+                        while cfg.LoopFarm and not cfg.IgnoredEntities[target.Name] and self.Tracker:IsAlive(target.Name, false, 1) do
+                            
+
+                            local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if currentHrp then
+								self:CheckObservationHaki()
+								self:EquipWeapon(false)
+								self:CastSkills(false)
+								
+                                currentHrp.CFrame = spawnCF
+                            end
+                            task.wait(cfg.TpTime)
+                        end
 					end
 				end
 			end
@@ -622,7 +680,7 @@ local GameRemotes = {
 
 local Tracker = EntityTracker.new(workspace:WaitForChild("NPCs"))
 local Spawner = BossSpawner.new(Tracker, GameRemotes)
-local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRemotes.ObservationHaki)
+local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRemotes.ObservationHaki, GameRemotes.Haki)
 
 Utility.EnableAntiAFK()
 Utility.EnableAutoRejoin()
@@ -668,51 +726,6 @@ Toggle_LoopFarm:OnChanged(function(Value)
 	Config.LoopFarm = Value
 end)
 
-local Toggle_AutoHaki =
-	Tabs.Main:AddToggle("Toggle_AutoHaki", { Title = "Auto Armament Haki (On Spawn)", Default = Config.AutoHaki })
-Toggle_AutoHaki:OnChanged(function(Value)
-	Config.AutoHaki = Value
-end)
-
-local Toggle_AutoObsHaki = Tabs.Main:AddToggle(
-	"Toggle_AutoObsHaki",
-	{ Title = "Auto Observation Haki (Always)", Default = Config.AutoObservationHaki }
-)
-Toggle_AutoObsHaki:OnChanged(function(Value)
-	Config.AutoObservationHaki = Value
-end)
-
--- Auto Equip & Weapon Selection
-Tabs.Main:AddParagraph({ Title = "Inventory Management", Content = "Configure auto-equipping of specific weapons." })
-
-local Toggle_AutoEquip =
-	Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
-Toggle_AutoEquip:OnChanged(function(Value)
-	Config.AutoEquip = Value
-end)
-
-local Dropdown_Weapon = Tabs.Main:AddDropdown("Dropdown_Weapon", {
-	Title = "Select Weapon",
-	Values = Utility.GetWeapons(),
-	Multi = false,
-	Default = 1,
-})
-Dropdown_Weapon:OnChanged(function(Value)
-	Config.SelectedWeapon = Value
-end)
-
-Tabs.Main:AddButton({
-	Title = "Refresh Weapon List",
-	Description = "Click this to update the dropdown if you get a new tool.",
-	Callback = function()
-		Dropdown_Weapon:SetValues(Utility.GetWeapons())
-		-- Restore the saved selection if it still exists
-		if table.find(Utility.GetWeapons(), Config.SelectedWeapon) then
-			Dropdown_Weapon:SetValue(Config.SelectedWeapon)
-		end
-	end,
-})
-
 local Slider_TpTime = Tabs.Main:AddSlider("Slider_TpTime", {
 	Title = "Teleport Delay",
 	Description = "Wait time between teleports",
@@ -725,24 +738,93 @@ local Slider_TpTime = Tabs.Main:AddSlider("Slider_TpTime", {
 	end,
 })
 
--- [[ Main Tab: Auto Skills ]]
-Tabs.Main:AddParagraph({ Title = "Auto Skills", Content = "Automatically use abilities ONLY when fighting Bosses." })
-
-local Toggle_AutoSkill =
-	Tabs.Main:AddToggle("Toggle_AutoSkill", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Enabled })
-Toggle_AutoSkill:OnChanged(function(Value)
-	Config.AutoSkill.Enabled = Value
+local Toggle_AutoHaki =
+	Tabs.Main:AddToggle("Toggle_AutoHaki", { Title = "Auto Armament Haki", Default = Config.AutoHaki })
+Toggle_AutoHaki:OnChanged(function(Value)
+	Config.AutoHaki = Value
 end)
 
-for key, data in pairs(Config.AutoSkill.Skills) do
-	local Toggle_Skill = Tabs.Main:AddToggle("Skill_" .. key, {
-		Title = "Use Skill " .. key,
-		Default = data.Enabled,
-	})
-	Toggle_Skill:OnChanged(function(Value)
-		Config.AutoSkill.Skills[key].Enabled = Value
-	end)
-end
+local Toggle_AutoObsHaki = Tabs.Main:AddToggle(
+	"Toggle_AutoObsHaki",
+	{ Title = "Auto Observation Haki", Default = Config.AutoObservationHaki }
+)
+Toggle_AutoObsHaki:OnChanged(function(Value)
+	Config.AutoObservationHaki = Value
+end)
+
+-- Auto Equip & Weapon Selection
+Tabs.Main:AddParagraph({ Title = "Inventory Management", Content = "Pick different weapons for different targets." })
+
+local Toggle_AutoEquip = Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
+Toggle_AutoEquip:OnChanged(function(Value) Config.AutoEquip = Value end)
+
+local Dropdown_WeaponNPC = Tabs.Main:AddDropdown("Dropdown_WeaponNPC", {
+    Title = "Weapon for NPCs",
+    Values = Utility.GetWeapons(),
+	Multi = false,
+    Default = Config.SelectedWeapon_NPC or 1,
+})
+Dropdown_WeaponNPC:OnChanged(function(Value) Config.SelectedWeapon_NPC = Value end)
+
+local Dropdown_WeaponBoss = Tabs.Main:AddDropdown("Dropdown_WeaponBoss", {
+    Title = "Weapon for Bosses",
+    Values = Utility.GetWeapons(),
+	Multi = false,
+    Default = Config.SelectedWeapon_Boss or 1,
+})
+Dropdown_WeaponBoss:OnChanged(function(Value) Config.SelectedWeapon_Boss = Value end)
+
+Tabs.Main:AddButton({
+    Title = "Refresh Weapon Lists",
+    Callback = function()
+        local weapons = Utility.GetWeapons()
+        Dropdown_WeaponNPC:SetValues(weapons)
+        Dropdown_WeaponBoss:SetValues(weapons)
+    end,
+})
+
+-- [[ Main Tab: Auto Skills ]]
+Tabs.Main:AddParagraph({ Title = "Auto Skills", Content = "Automatically cast selected skills during combat." })
+
+local Toggle_AutoSkillBoss = Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
+Toggle_AutoSkillBoss:OnChanged(function(Value) Config.AutoSkill.Bosses = Value end)
+
+local Dropdown_BossSkills = Tabs.Main:AddDropdown("Dropdown_BossSkills", {
+    Title = "Boss Skills Selection",
+    Values = {"Z", "X", "C", "V", "F"},
+    Multi = true,
+    Default = Config.AutoSkill.BossSkills,
+})
+Dropdown_BossSkills:OnChanged(function(Value) Config.AutoSkill.BossSkills = Value end)
+
+
+local Toggle_AutoSkillNPC = Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
+Toggle_AutoSkillNPC:OnChanged(function(Value) Config.AutoSkill.NPCs = Value end)
+
+local Dropdown_NPCSkills = Tabs.Main:AddDropdown("Dropdown_NPCSkills", {
+    Title = "NPC Skills Selection",
+    Values = {"Z", "X", "C", "V", "F"},
+    Multi = true,
+    Default = Config.AutoSkill.NPCSkills,
+})
+Dropdown_NPCSkills:OnChanged(function(Value) Config.AutoSkill.NPCSkills = Value end)
+
+
+-- [[ Mobs / Entities Tab ]]
+Tabs.Mobs:AddParagraph({ Title = "NPC Settings", Content = "Control how many NPCs must spawn before attacking." })
+
+local Slider_NPCThreshold = Tabs.Mobs:AddSlider("Slider_NPCThreshold", {
+    Title = "Wait for NPCs",
+    Description = "Script will only attack when this many NPCs are gathered.",
+    Default = Config.NPCAttackThreshold,
+    Min = 1,
+    Max = 5,
+    Rounding = 0,
+})
+Slider_NPCThreshold:OnChanged(function(Value)
+    Config.NPCAttackThreshold = Value
+end)
+
 
 -- [[ Mobs / Entities Tab ]]
 Tabs.Mobs:AddParagraph({ Title = "Entity Targeting", Content = "Enable the entities you want the script to farm." })
