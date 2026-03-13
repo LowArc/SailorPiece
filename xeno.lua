@@ -594,7 +594,7 @@ function Utility.EnableAutoRejoin()
 
 		-- FIX (leak #3): removed the infinite inner loop — single teleport with retry, not forever
 		task.spawn(function()
-			for _ = 1, 10 do
+			while task.wait(5) do
 				if pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end) then
 					break
 				end
