@@ -21,8 +21,8 @@ local Config = {
 	TpTime = 0.1,
 	NPCAttackThreshold = 5,
 	AutoEquip = false,
-	SelectedWeapon_NPC = "None",  
-    SelectedWeapon_Boss = "None",
+	SelectedWeapon_NPC = "None",
+	SelectedWeapon_Boss = "None",
 	AutoHaki = false,
 	AutoObservationHaki = false,
 	IgnoredEntities = {
@@ -64,17 +64,17 @@ local Config = {
 		Anos = { Auto = false, Diff = "Normal" },
 	},
 	AutoSkill = {
-        Bosses = false,
-        NPCs = false,
-        BossSkills = {}, -- Stores multi-dropdown values for Bosses
-        NPCSkills = {},  -- Stores multi-dropdown values for NPCs
-        SkillIds = { -- Maps the string to the ID
-            Z = 1,
-            X = 2,
-            C = 3,
-            V = 4,
-            F = 5,
-        },
+		Bosses = false,
+		NPCs = false,
+		BossSkills = {},
+		NPCSkills = {},
+		SkillIds = {
+			Z = 1,
+			X = 2,
+			C = 3,
+			V = 4,
+			F = 5,
+		},
 	},
 }
 
@@ -110,29 +110,29 @@ local CONSTANTS = {
 		TrueAizen = CFrame.new(-1205, 1604, 1774),
 	},
 	FarmOrder = {
-		{ Name = "Swordsman", Remote = "Judgement", IsBossType = false },
-		{ Name = "Quincy", Remote = "SoulSociety", IsBossType = false },
-		{ Name = "AcademyTeacher", Remote = "Academy", IsBossType = false },
-		{ Name = "Slime", Remote = "Slime", IsBossType = false },
-		{ Name = "StrongSorcerer", Remote = "Shinjuku", IsBossType = false },
-		{ Name = "Hollow", Remote = "HuecoMundo", IsBossType = false },
-		{ Name = "Gojo", Remote = "Shibuya", IsBossType = true },
-		{ Name = "Yuji", Remote = "Shibuya", IsBossType = true },
-		{ Name = "Sukuna", Remote = "Shibuya", IsBossType = true },
-		{ Name = "Jinwoo", Remote = "Sailor", IsBossType = true },
-		{ Name = "Alucard", Remote = "Sailor", IsBossType = true },
-		{ Name = "Aizen", Remote = "HuecoMundo", IsBossType = true },
-		{ Name = "Yamato", Remote = "Judgement", IsBossType = true },
-		{ Name = "Saber", Remote = "Boss", IsBossType = true },
-		{ Name = "Ichigo", Remote = "Boss", IsBossType = true },
-		{ Name = "QinShi", Remote = "Boss", IsBossType = true },
-		{ Name = "Gilgamesh", Remote = "Boss", IsBossType = true },
-		{ Name = "BlessedMaiden", Remote = "Boss", IsBossType = true },
-		{ Name = "StrongestinHistory", Remote = "Shinjuku", IsBossType = true },
-		{ Name = "StrongestofToday", Remote = "Shinjuku", IsBossType = true },
-		{ Name = "Rimuru", Remote = "Slime", IsBossType = true },
-		{ Name = "Anos", Remote = "Academy", IsBossType = true },
-		{ Name = "TrueAizen", Remote = "SoulSociety", IsBossType = true },
+		{ Name = "Swordsman",        Remote = "Judgement",   IsBossType = false },
+		{ Name = "Quincy",           Remote = "SoulSociety", IsBossType = false },
+		{ Name = "AcademyTeacher",   Remote = "Academy",     IsBossType = false },
+		{ Name = "Slime",            Remote = "Slime",       IsBossType = false },
+		{ Name = "StrongSorcerer",   Remote = "Shinjuku",    IsBossType = false },
+		{ Name = "Hollow",           Remote = "HuecoMundo",  IsBossType = false },
+		{ Name = "Gojo",             Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Yuji",             Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Sukuna",           Remote = "Shibuya",     IsBossType = true },
+		{ Name = "Jinwoo",           Remote = "Sailor",      IsBossType = true },
+		{ Name = "Alucard",          Remote = "Sailor",      IsBossType = true },
+		{ Name = "Aizen",            Remote = "HuecoMundo",  IsBossType = true },
+		{ Name = "Yamato",           Remote = "Judgement",   IsBossType = true },
+		{ Name = "Saber",            Remote = "Boss",        IsBossType = true },
+		{ Name = "Ichigo",           Remote = "Boss",        IsBossType = true },
+		{ Name = "QinShi",           Remote = "Boss",        IsBossType = true },
+		{ Name = "Gilgamesh",        Remote = "Boss",        IsBossType = true },
+		{ Name = "BlessedMaiden",    Remote = "Boss",        IsBossType = true },
+		{ Name = "StrongestinHistory", Remote = "Shinjuku",  IsBossType = true },
+		{ Name = "StrongestofToday", Remote = "Shinjuku",    IsBossType = true },
+		{ Name = "Rimuru",           Remote = "Slime",       IsBossType = true },
+		{ Name = "Anos",             Remote = "Academy",     IsBossType = true },
+		{ Name = "TrueAizen",        Remote = "SoulSociety", IsBossType = true },
 	},
 }
 
@@ -157,18 +157,21 @@ function EntityTracker:Register(npc)
 		local humanoid = npc:WaitForChild("Humanoid", 3)
 		if humanoid and humanoid.Health > 0 then
 			self.Active[npc] = true
+
+			-- FIX: declare both upfront so each can reference the other for mutual cleanup
 			local deathConn, removeConn
+
 			deathConn = humanoid.Died:Connect(function()
 				self.Active[npc] = nil
 				deathConn:Disconnect()
+				removeConn:Disconnect() -- FIX: was never disconnected before
 			end)
+
 			removeConn = npc.AncestryChanged:Connect(function(_, parent)
 				if not parent then
 					self.Active[npc] = nil
 					removeConn:Disconnect()
-					if deathConn then
-						deathConn:Disconnect()
-					end
+					deathConn:Disconnect() -- FIX: guard removed, both always valid here
 				end
 			end)
 		end
@@ -179,31 +182,49 @@ function EntityTracker:Init()
 	for _, child in ipairs(self.Folder:GetChildren()) do
 		self:Register(child)
 	end
-	self.Folder.ChildAdded:Connect(function(child)
+	-- FIX: store the ChildAdded connection so it can be cleaned up later
+	local conn = self.Folder.ChildAdded:Connect(function(child)
 		self:Register(child)
 	end)
+	table.insert(self.Connections, conn)
+end
+
+-- FIX: Added Destroy method to clean up all stored connections
+function EntityTracker:Destroy()
+	for _, conn in ipairs(self.Connections) do
+		conn:Disconnect()
+	end
+	self.Connections = {}
+	self.Active = {}
 end
 
 function EntityTracker:IsAlive(queryName, isBossType, requiredCount)
 	requiredCount = requiredCount or 5
 	local currentCount = 0
 
+	-- FIX: collect stale refs first, then clean — never modify a table during pairs() iteration
+	local stale = {}
 	for npc, _ in pairs(self.Active) do
-		if npc and npc.Parent then
-			if isBossType then
-				if string.find(npc.Name, "^" .. queryName) then
-					return true
-				end
-			else
-				if string.find(npc.Name, queryName) then
-					currentCount += 1
-					if currentCount >= requiredCount then
-						return true
-					end
-				end
+		if not (npc and npc.Parent) then
+			table.insert(stale, npc)
+		end
+	end
+	for _, npc in ipairs(stale) do
+		self.Active[npc] = nil
+	end
+
+	for npc, _ in pairs(self.Active) do
+		if isBossType then
+			if string.find(npc.Name, "^" .. queryName) then
+				return true
 			end
 		else
-			self.Active[npc] = nil
+			if string.find(npc.Name, queryName) then
+				currentCount += 1
+				if currentCount >= requiredCount then
+					return true
+				end
+			end
 		end
 	end
 	return false
@@ -220,12 +241,21 @@ function BossSpawner.new(tracker, remotes)
 		Tracker = tracker,
 		Remotes = remotes,
 		StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" },
+		_running = false, -- FIX: cancellation flag
 	}, BossSpawner)
 end
 
+function BossSpawner:Stop()
+	self._running = false
+end
+
 function BossSpawner:Start()
+	-- FIX: prevent duplicate loops on re-execution
+	if self._running then return end
+	self._running = true
+
 	task.spawn(function()
-		while task.wait(0.5) do
+		while self._running and task.wait(0.5) do
 			local cfg = _G.FarmConfig
 
 			if cfg.Boss.AutoSpawn then
@@ -275,128 +305,115 @@ function Farmer.new(tracker, tpRemote, abilityRemote, obsHakiRemote, hakiRemote)
 		ObsHakiRemote = obsHakiRemote,
 		HakiRemote = hakiRemote,
 		LastSkillTime = 0,
+		_running = false, -- FIX: cancellation flag
 	}, Farmer)
 end
 
+function Farmer:Stop()
+	self._running = false
+end
+
 function Farmer:EquipWeapon(isBoss)
-    local cfg = _G.FarmConfig
-    if not cfg.AutoEquip then return end
+	local cfg = _G.FarmConfig
+	if not cfg.AutoEquip then return end
 
-    -- Determine which weapon to use based on the target type
-    local weaponName = isBoss and cfg.SelectedWeapon_Boss or cfg.SelectedWeapon_NPC
-    
-    if weaponName == "" or weaponName == "None" then
-        return
-    end
+	local weaponName = isBoss and cfg.SelectedWeapon_Boss or cfg.SelectedWeapon_NPC
+	if weaponName == "" or weaponName == "None" then return end
 
-    local char = LocalPlayer.Character
-    if not char then return end
+	local char = LocalPlayer.Character
+	if not char then return end
 
-    local hum = char:FindFirstChild("Humanoid")
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
+	local hum = char:FindFirstChild("Humanoid")
+	local backpack = LocalPlayer:FindFirstChild("Backpack")
+	if not hum or hum.Health <= 0 or not backpack then return end
 
-    if not hum or hum.Health <= 0 or not backpack then return end
+	-- FIX: if the tool is already equipped in the character, do nothing.
+	-- Calling Activate() on a tool that isn't actively held spams warnings every tick.
+	-- Equipping is all that's needed — the game handles combat automatically.
+	if char:FindFirstChild(weaponName) then return end
 
-    local tool = char:FindFirstChild(weaponName)
-    if not tool then
-        tool = backpack:FindFirstChild(weaponName)
-        if tool then
-            hum:EquipTool(tool)
-        end
-    else
-        pcall(function()
-            tool:Activate()
-        end)
-    end
+	local tool = backpack:FindFirstChild(weaponName)
+	if tool then
+		hum:EquipTool(tool)
+	end
 end
 
 function Farmer:CheckArmamentHaki()
-    local cfg = _G.FarmConfig
-    if not cfg.AutoHaki then return end
+	local cfg = _G.FarmConfig
+	if not cfg.AutoHaki then return end
 
-    local char = LocalPlayer.Character
-    if not char then return end
+	local char = LocalPlayer.Character
+	if not char then return end
 
-    -- Check for R15 Hand or R6 Arm
-    local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
-    
-    -- Check if the color is "Really black"
-    local isHakiActive = false
-    if rightArm and rightArm.BrickColor == BrickColor.new("Really black") then
-        isHakiActive = true
-    end
+	local rightArm = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
+	local isHakiActive = rightArm and rightArm.BrickColor == BrickColor.new("Really black")
 
-    -- If not black, it means Haki is OFF
-    if not isHakiActive then
-        -- Debounce to prevent spamming the remote
-        if not self.LastArmamentToggle or (tick() - self.LastArmamentToggle > 3) then
-            self.LastArmamentToggle = tick()
-                
+	if not isHakiActive then
+		if not self.LastArmamentToggle or (tick() - self.LastArmamentToggle > 3) then
+			self.LastArmamentToggle = tick()
 			pcall(function()
 				self.HakiRemote:FireServer("Toggle")
 			end)
-        end
-    end
+		end
+	end
 end
 
 function Farmer:CheckObservationHaki()
-    local cfg = _G.FarmConfig
-    if not cfg.AutoObservationHaki then return end
+	local cfg = _G.FarmConfig
+	if not cfg.AutoObservationHaki then return end
+	if self.LastObsToggle and (tick() - self.LastObsToggle < 3) then return end
 
-    if self.LastObsToggle and (tick() - self.LastObsToggle < 3) then return end
+	local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+	local dodgeUI = playerGui and playerGui:FindFirstChild("DodgeCounterUI")
 
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    local dodgeUI = playerGui and playerGui:FindFirstChild("DodgeCounterUI")
-    
-    -- Precise check: Is the UI active and visible?
-    local isVisible = false
-    if dodgeUI and dodgeUI:FindFirstChild("MainFrame") then
-        isVisible = dodgeUI.MainFrame.Visible
-    end
+	local isVisible = false
+	if dodgeUI and dodgeUI:FindFirstChild("MainFrame") then
+		isVisible = dodgeUI.MainFrame.Visible
+	end
 
-    -- Check if on cooldown
-    local cdUI = playerGui and playerGui:FindFirstChild("CooldownUI")
-    local onCooldown = false
-    if cdUI and cdUI:FindFirstChild("MainFrame") and cdUI.MainFrame:FindFirstChild("Cooldown_ObsHaki_Observation") then
-        onCooldown = true
-    end
+	local cdUI = playerGui and playerGui:FindFirstChild("CooldownUI")
+	local onCooldown = cdUI
+		and cdUI:FindFirstChild("MainFrame")
+		and cdUI.MainFrame:FindFirstChild("Cooldown_ObsHaki_Observation") ~= nil
 
-    if not isVisible and not onCooldown then
-        self.LastObsToggle = tick()
-        pcall(function()
-            self.ObsHakiRemote:FireServer("Toggle")
-        end)
-    end
+	if not isVisible and not onCooldown then
+		self.LastObsToggle = tick()
+		pcall(function()
+			self.ObsHakiRemote:FireServer("Toggle")
+		end)
+	end
 end
 
 function Farmer:CastSkills(isBoss)
-    local cfg = _G.FarmConfig
-    
-    local shouldCast = isBoss and cfg.AutoSkill.Bosses or (not isBoss and cfg.AutoSkill.NPCs)
-    if shouldCast and (tick() - self.LastSkillTime > 0.1) then
-        self.LastSkillTime = tick()
-        
-        -- Choose the correct skill list based on target type
-        local activeSkills = isBoss and cfg.AutoSkill.BossSkills or cfg.AutoSkill.NPCSkills
-        
-        for skillName, isEnabled in pairs(activeSkills) do
-            if isEnabled then
-                local skillId = cfg.AutoSkill.SkillIds[skillName]
-                if skillId then
-                    task.spawn(function()
-                        pcall(function()
-                            self.AbilityRemote:FireServer(skillId)
-                        end)
-                    end)
-                end
-            end
-        end
-    end
+	local cfg = _G.FarmConfig
+
+	local shouldCast = isBoss and cfg.AutoSkill.Bosses or (not isBoss and cfg.AutoSkill.NPCs)
+	if not shouldCast then return end
+	if tick() - self.LastSkillTime <= 0.1 then return end
+
+	self.LastSkillTime = tick()
+	local activeSkills = isBoss and cfg.AutoSkill.BossSkills or cfg.AutoSkill.NPCSkills
+
+	-- FIX: removed per-skill task.spawn — direct pcall is sufficient and avoids coroutine churn
+	for skillName, isEnabled in pairs(activeSkills) do
+		if isEnabled then
+			local skillId = cfg.AutoSkill.SkillIds[skillName]
+			if skillId then
+				pcall(function()
+					self.AbilityRemote:FireServer(skillId)
+				end)
+			end
+		end
+	end
 end
 
 function Farmer:Start()
+	-- FIX: prevent duplicate loops on re-execution
+	if self._running then return end
+	self._running = true
+
 	task.spawn(function()
-		while task.wait() do
+		while self._running and task.wait() do
 			local cfg = _G.FarmConfig
 			if not cfg.LoopFarm then
 				continue
@@ -413,7 +430,7 @@ function Farmer:Start()
 			end
 
 			for _, target in ipairs(CONSTANTS.FarmOrder) do
-				if not cfg.LoopFarm then
+				if not self._running or not cfg.LoopFarm then
 					break
 				end
 				if cfg.IgnoredEntities[target.Name] then
@@ -435,11 +452,13 @@ function Farmer:Start()
 						end
 
 						while
-							cfg.LoopFarm
+							self._running
+							and cfg.LoopFarm
 							and not cfg.IgnoredEntities[target.Name]
 							and self.Tracker:IsAlive(target.Name, true)
 						do
 							self:CheckObservationHaki()
+							self:CheckArmamentHaki()
 							self:EquipWeapon(true)
 							self:CastSkills(true)
 
@@ -457,46 +476,43 @@ function Farmer:Start()
 
 								local targetGoal = liveBoss and liveBoss.CFrame or spawnCF
 								local distance = (currentHrp.Position - targetGoal.Position).Magnitude
-
-								-- Logic: Always face the boss if it exists, otherwise face the spawn point
 								local lookAtPos = targetGoal.Position
-								
+
 								if distance > 20 then
 									if distance > 150 and target.Remote then
 										self.TpRemote:FireServer(target.Remote)
 										task.wait(0.5)
 									end
-
-									-- Teleport to the boss and look at it
 									currentHrp.CFrame = CFrame.lookAt(targetGoal.Position + Vector3.new(0, 0, 3), lookAtPos)
 									task.wait(cfg.TpTime or 0.5)
 								else
-									-- Even if we are close enough, continuously update rotation to look at the boss
 									currentHrp.CFrame = CFrame.lookAt(currentHrp.Position, lookAtPos)
 								end
-
-								
 							end
+
 							task.wait(cfg.TpTime)
 						end
 					else
 						if target.Remote then
-                            self.TpRemote:FireServer(target.Remote)
-                        end
+							self.TpRemote:FireServer(target.Remote)
+						end
 
-                        while cfg.LoopFarm and not cfg.IgnoredEntities[target.Name] and self.Tracker:IsAlive(target.Name, false, 1) do
-                            
-
-                            local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                            if currentHrp then
+						while
+							self._running
+							and cfg.LoopFarm
+							and not cfg.IgnoredEntities[target.Name]
+							and self.Tracker:IsAlive(target.Name, false, 1)
+						do
+							local currentHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+							if currentHrp then
 								self:CheckObservationHaki()
+								self:CheckArmamentHaki()
 								self:EquipWeapon(false)
 								self:CastSkills(false)
-								
-                                currentHrp.CFrame = spawnCF
-                            end
-                            task.wait(cfg.TpTime)
-                        end
+								currentHrp.CFrame = spawnCF
+							end
+							task.wait(cfg.TpTime)
+						end
 					end
 				end
 			end
@@ -508,69 +524,66 @@ end
 -- || CLASS: Utility / Character Manager
 -- ==========================================
 local Utility = {}
+
+-- FIX: store all connections in a table for cleanup on re-execution
+local _utilityConnections = {}
+
 function Utility.EnableAntiAFK()
-	if _G.AntiAFK_Enabled then
-		return
-	end
+	if _G.AntiAFK_Enabled then return end
 	_G.AntiAFK_Enabled = true
 
 	local VirtualUser = game:GetService("VirtualUser")
-	LocalPlayer.Idled:Connect(function()
+	-- FIX: store the connection so it can be disconnected later
+	local conn = LocalPlayer.Idled:Connect(function()
 		VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
 		task.wait(1)
 		VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
 	end)
+	table.insert(_utilityConnections, conn)
 end
 
 function Utility.EnableAutoRejoin()
 	local TeleportService = game:GetService("TeleportService")
 	local GuiService = game:GetService("GuiService")
 
-	-- This handles the standard "You have been disconnected" popup
-	GuiService.ErrorMessageChanged:Connect(function()
+	-- FIX: store connection for cleanup
+	local conn = GuiService.ErrorMessageChanged:Connect(function()
 		local cfg = _G.FarmConfig
-		if not cfg.AutoRejoin then
-			return
-		end
+		if not cfg.AutoRejoin then return end
 
-		-- Check if it's a kick from your own FriendCheck
-		-- (We check the actual kick reason from the client)
 		local lastError = GuiService:GetErrorMessage()
 		if string.find(lastError, "ArcX Security") then
 			warn("Auto-Rejoin blocked: Security Kick.")
 			return
 		end
 
-		-- Internet Outage Protection Loop
-		spawn(function()
-			while true do
-				-- Attempt to teleport
-				TeleportService:Teleport(game.PlaceId, LocalPlayer)
-
-				-- Wait 10 seconds before trying again if the first one failed
+		-- FIX: replaced deprecated spawn() with task.spawn()
+		-- FIX: added a finite retry limit to prevent a truly infinite leak
+		task.spawn(function()
+			local maxRetries = 10
+			for i = 1, maxRetries do
+				local success = pcall(function()
+					TeleportService:Teleport(game.PlaceId, LocalPlayer)
+				end)
+				if success then break end
 				task.wait(10)
 			end
 		end)
 	end)
+	table.insert(_utilityConnections, conn)
 end
 
 function Utility.EnableFriendCheck()
 	local function checkAndKick(player)
-		if not _G.FarmConfig.FriendOnly or player == LocalPlayer then
-			return
-		end
+		if not _G.FarmConfig.FriendOnly or player == LocalPlayer then return end
 
 		local isFriend = false
 		local success, result = pcall(function()
 			return LocalPlayer:IsFriendsWith(player.UserId)
 		end)
-
-		if success then
-			isFriend = result
-		end
+		if success then isFriend = result end
 
 		if not isFriend then
-			-- The [ArcX Security] tag is the "Key" that tells AutoRejoin to stay off.
 			LocalPlayer:Kick(
 				"\n[ArcX Security]\nStranger Detected: " .. player.Name .. "\nAuto-Rejoin disabled to prevent looping."
 			)
@@ -581,7 +594,9 @@ function Utility.EnableFriendCheck()
 		checkAndKick(player)
 	end
 
-	Players.PlayerAdded:Connect(checkAndKick)
+	-- FIX: store the PlayerAdded connection
+	local conn = Players.PlayerAdded:Connect(checkAndKick)
+	table.insert(_utilityConnections, conn)
 end
 
 function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
@@ -590,51 +605,46 @@ function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 		task.wait(1)
 		local cfg = _G.FarmConfig
 
-		-- Auto Armament Haki
 		if cfg.AutoHaki then
-			pcall(function()
-				hakiRemote:FireServer("Toggle")
-			end)
+			pcall(function() hakiRemote:FireServer("Toggle") end)
 		end
 
-		-- Auto Observation Haki (With UI Checks)
 		if cfg.AutoObservationHaki then
 			local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 			if playerGui then
-				-- Check if on cooldown
 				local cdUI = playerGui:FindFirstChild("CooldownUI")
-				local hasCD = false
-				if cdUI then
-					local cdMain = cdUI:FindFirstChild("MainFrame")
-					if cdMain and cdMain:FindFirstChild("Cooldown_ObsHaki_Observation") then
-						hasCD = true
-					end
-				end
+				local hasCD = cdUI
+					and cdUI:FindFirstChild("MainFrame")
+					and cdUI.MainFrame:FindFirstChild("Cooldown_ObsHaki_Observation") ~= nil
 
-				-- Check if Dodge Counter UI is already visible
 				local dodgeUI = playerGui:FindFirstChild("DodgeCounterUI")
-				local isVisible = false
-				if dodgeUI then
-					local mainFrame = dodgeUI:FindFirstChild("MainFrame")
-					if mainFrame and mainFrame.Visible then
-						isVisible = true
-					end
-				end
+				local isVisible = dodgeUI
+					and dodgeUI:FindFirstChild("MainFrame")
+					and dodgeUI.MainFrame.Visible
 
-				-- Fire if safe
 				if not hasCD and not isVisible then
-					pcall(function()
-						obsHakiRemote:FireServer("Toggle")
-					end)
+					pcall(function() obsHakiRemote:FireServer("Toggle") end)
 				end
 			end
 		end
 	end
 
-	LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+	-- FIX: store CharacterAdded connection
+	local conn = LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+	table.insert(_utilityConnections, conn)
+
 	if LocalPlayer.Character then
 		task.spawn(onCharacterAdded, LocalPlayer.Character)
 	end
+end
+
+-- FIX: centralized cleanup to prevent duplicate listeners on re-execution
+function Utility.Cleanup()
+	for _, conn in ipairs(_utilityConnections) do
+		conn:Disconnect()
+	end
+	_utilityConnections = {}
+	_G.AntiAFK_Enabled = nil
 end
 
 function Utility.GetWeapons()
@@ -661,6 +671,13 @@ end
 -- ==========================================
 -- || EXECUTION
 -- ==========================================
+
+-- FIX: stop any previous script instances before starting new ones
+if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop() end
+if _G.ArcX_Farmer then _G.ArcX_Farmer:Stop() end
+if _G.ArcX_Tracker then _G.ArcX_Tracker:Destroy() end
+Utility.Cleanup()
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -681,6 +698,11 @@ local GameRemotes = {
 local Tracker = EntityTracker.new(workspace:WaitForChild("NPCs"))
 local Spawner = BossSpawner.new(Tracker, GameRemotes)
 local AutoFarm = Farmer.new(Tracker, GameRemotes.Teleport, AbilityRemote, GameRemotes.ObservationHaki, GameRemotes.Haki)
+
+-- FIX: store instances globally so the next re-execution can stop them cleanly
+_G.ArcX_Tracker = Tracker
+_G.ArcX_Spawner = Spawner
+_G.ArcX_Farmer = AutoFarm
 
 Utility.EnableAntiAFK()
 Utility.EnableAutoRejoin()
@@ -755,78 +777,91 @@ end)
 -- Auto Equip & Weapon Selection
 Tabs.Main:AddParagraph({ Title = "Inventory Management", Content = "Pick different weapons for different targets." })
 
-local Toggle_AutoEquip = Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
-Toggle_AutoEquip:OnChanged(function(Value) Config.AutoEquip = Value end)
+local Toggle_AutoEquip =
+	Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
+Toggle_AutoEquip:OnChanged(function(Value)
+	Config.AutoEquip = Value
+end)
 
 local Dropdown_WeaponNPC = Tabs.Main:AddDropdown("Dropdown_WeaponNPC", {
-    Title = "Weapon for NPCs",
-    Values = Utility.GetWeapons(),
+	Title = "Weapon for NPCs",
+	Values = Utility.GetWeapons(),
 	Multi = false,
-    Default = Config.SelectedWeapon_NPC or 1,
+	Default = Config.SelectedWeapon_NPC or 1,
 })
-Dropdown_WeaponNPC:OnChanged(function(Value) Config.SelectedWeapon_NPC = Value end)
+Dropdown_WeaponNPC:OnChanged(function(Value)
+	Config.SelectedWeapon_NPC = Value
+end)
 
 local Dropdown_WeaponBoss = Tabs.Main:AddDropdown("Dropdown_WeaponBoss", {
-    Title = "Weapon for Bosses",
-    Values = Utility.GetWeapons(),
+	Title = "Weapon for Bosses",
+	Values = Utility.GetWeapons(),
 	Multi = false,
-    Default = Config.SelectedWeapon_Boss or 1,
+	Default = Config.SelectedWeapon_Boss or 1,
 })
-Dropdown_WeaponBoss:OnChanged(function(Value) Config.SelectedWeapon_Boss = Value end)
+Dropdown_WeaponBoss:OnChanged(function(Value)
+	Config.SelectedWeapon_Boss = Value
+end)
 
 Tabs.Main:AddButton({
-    Title = "Refresh Weapon Lists",
-    Callback = function()
-        local weapons = Utility.GetWeapons()
-        Dropdown_WeaponNPC:SetValues(weapons)
-        Dropdown_WeaponBoss:SetValues(weapons)
-    end,
+	Title = "Refresh Weapon Lists",
+	Callback = function()
+		local weapons = Utility.GetWeapons()
+		Dropdown_WeaponNPC:SetValues(weapons)
+		Dropdown_WeaponBoss:SetValues(weapons)
+	end,
 })
 
 -- [[ Main Tab: Auto Skills ]]
 Tabs.Main:AddParagraph({ Title = "Auto Skills", Content = "Automatically cast selected skills during combat." })
 
-local Toggle_AutoSkillBoss = Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
-Toggle_AutoSkillBoss:OnChanged(function(Value) Config.AutoSkill.Bosses = Value end)
+local Toggle_AutoSkillBoss =
+	Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
+Toggle_AutoSkillBoss:OnChanged(function(Value)
+	Config.AutoSkill.Bosses = Value
+end)
 
 local Dropdown_BossSkills = Tabs.Main:AddDropdown("Dropdown_BossSkills", {
-    Title = "Boss Skills Selection",
-    Values = {"Z", "X", "C", "V", "F"},
-    Multi = true,
-    Default = Config.AutoSkill.BossSkills,
+	Title = "Boss Skills Selection",
+	Values = { "Z", "X", "C", "V", "F" },
+	Multi = true,
+	Default = Config.AutoSkill.BossSkills,
 })
-Dropdown_BossSkills:OnChanged(function(Value) Config.AutoSkill.BossSkills = Value end)
+Dropdown_BossSkills:OnChanged(function(Value)
+	Config.AutoSkill.BossSkills = Value
+end)
 
-
-local Toggle_AutoSkillNPC = Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
-Toggle_AutoSkillNPC:OnChanged(function(Value) Config.AutoSkill.NPCs = Value end)
+local Toggle_AutoSkillNPC =
+	Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
+Toggle_AutoSkillNPC:OnChanged(function(Value)
+	Config.AutoSkill.NPCs = Value
+end)
 
 local Dropdown_NPCSkills = Tabs.Main:AddDropdown("Dropdown_NPCSkills", {
-    Title = "NPC Skills Selection",
-    Values = {"Z", "X", "C", "V", "F"},
-    Multi = true,
-    Default = Config.AutoSkill.NPCSkills,
+	Title = "NPC Skills Selection",
+	Values = { "Z", "X", "C", "V", "F" },
+	Multi = true,
+	Default = Config.AutoSkill.NPCSkills,
 })
-Dropdown_NPCSkills:OnChanged(function(Value) Config.AutoSkill.NPCSkills = Value end)
-
+Dropdown_NPCSkills:OnChanged(function(Value)
+	Config.AutoSkill.NPCSkills = Value
+end)
 
 -- [[ Mobs / Entities Tab ]]
 Tabs.Mobs:AddParagraph({ Title = "NPC Settings", Content = "Control how many NPCs must spawn before attacking." })
 
 local Slider_NPCThreshold = Tabs.Mobs:AddSlider("Slider_NPCThreshold", {
-    Title = "Wait for NPCs",
-    Description = "Script will only attack when this many NPCs are gathered.",
-    Default = Config.NPCAttackThreshold,
-    Min = 1,
-    Max = 5,
-    Rounding = 0,
+	Title = "Wait for NPCs",
+	Description = "Script will only attack when this many NPCs are gathered.",
+	Default = Config.NPCAttackThreshold,
+	Min = 1,
+	Max = 5,
+	Rounding = 0,
 })
 Slider_NPCThreshold:OnChanged(function(Value)
-    Config.NPCAttackThreshold = Value
+	Config.NPCAttackThreshold = Value
 end)
 
-
--- [[ Mobs / Entities Tab ]]
 Tabs.Mobs:AddParagraph({ Title = "Entity Targeting", Content = "Enable the entities you want the script to farm." })
 
 local EntityCategories = {
@@ -841,16 +876,8 @@ local EntityCategories = {
 	{
 		Name = "Summon Bosses",
 		List = {
-			"Saber",
-			"Ichigo",
-			"QinShi",
-			"Gilgamesh",
-			"BlessedMaiden",
-			"StrongestinHistory",
-			"StrongestofToday",
-			"Rimuru",
-			"Anos",
-			"TrueAizen",
+			"Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden",
+			"StrongestinHistory", "StrongestofToday", "Rimuru", "Anos", "TrueAizen",
 		},
 	},
 }
@@ -919,7 +946,7 @@ for bossName, bossData in pairs(Config.Specials) do
 	end)
 end
 
--- [[ Settings Tab]]
+-- [[ Settings Tab ]]
 Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
 
 local Toggle_WhiteScreen = Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
@@ -927,11 +954,9 @@ local Toggle_WhiteScreen = Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
 	Description = "Disables 3D Rendering to save CPU/GPU. Screen will freeze/go dark.",
 	Default = Config.WhiteScreen,
 })
-
 Toggle_WhiteScreen:OnChanged(function(Value)
 	Config.WhiteScreen = Value
 	game:GetService("RunService"):Set3dRenderingEnabled(not Value)
-
 	if Value then
 		Fluent:Notify({
 			Title = "ArcX Optimization",
@@ -946,7 +971,6 @@ local Toggle_AutoRejoin = Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
 	Description = "Automatically rejoins the server if you get kicked or lose connection.",
 	Default = Config.AutoRejoin,
 })
-
 Toggle_AutoRejoin:OnChanged(function(Value)
 	Config.AutoRejoin = Value
 end)
@@ -956,7 +980,6 @@ local Toggle_FriendOnly = Tabs.Settings:AddToggle("Toggle_FriendOnly", {
 	Description = "Kicks you from the server if a non-friend is present.",
 	Default = Config.FriendOnly,
 })
-
 Toggle_FriendOnly:OnChanged(function(Value)
 	Config.FriendOnly = Value
 	if Value then
@@ -967,7 +990,6 @@ Toggle_FriendOnly:OnChanged(function(Value)
 					isFriend = LocalPlayer:IsFriendsWith(player.UserId)
 				end)
 				if not isFriend then
-					-- Included the tag here too!
 					LocalPlayer:Kick("[ArcX Security] Friend-Only Mode Enabled: Stranger found.")
 				end
 			end
@@ -979,7 +1001,8 @@ end)
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "Dropdown_Weapon" }) -- Don't auto-save weapon list state as it changes
+-- FIX: corrected ignore indexes to match the actual dropdown IDs
+SaveManager:SetIgnoreIndexes({ "Dropdown_WeaponNPC", "Dropdown_WeaponBoss" })
 InterfaceManager:SetFolder("ArcX")
 SaveManager:SetFolder("ArcX/configs")
 
