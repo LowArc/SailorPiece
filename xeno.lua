@@ -48,6 +48,7 @@ local Config = {
 		QinShi             = true,
 		Gilgamesh          = true,
 		BlessedMaiden      = true,
+		SaberAlter         = true,
 		StrongestinHistory = true,
 		StrongestofToday   = true,
 		Rimuru             = true,
@@ -73,6 +74,9 @@ local Config = {
 		NPCSkills  = {},
 		SkillIds   = { Z = 1, X = 2, C = 3, V = 4, F = 5 },
 	},
+	AutoQuest = {
+		SelectedNPC  = "None",
+	},
 }
 
 _G.FarmConfig = Config
@@ -81,7 +85,6 @@ _G.FarmConfig = Config
 -- || CONSTANTS
 -- ==========================================
 local CONSTANTS = {
-	-- FIX (optimization): cache the haki BrickColor once instead of creating it every tick
 	HakiBlack = BrickColor.new("Really black"),
 
 	Locations = {
@@ -104,6 +107,7 @@ local CONSTANTS = {
 		QinShi             = CFrame.new(  770,   -1,   -1086),
 		Gilgamesh          = CFrame.new(  770,   -1,   -1086),
 		BlessedMaiden      = CFrame.new(  770,   -1,   -1086),
+		SaberAlter         = CFrame.new(  770,   -1,   -1086),
 		StrongestinHistory = CFrame.new(  604,    3,   -2314),
 		StrongestofToday   = CFrame.new(  139,    3,   -2432),
 		Rimuru             = CFrame.new(-1358,   19,     219),
@@ -131,6 +135,7 @@ local CONSTANTS = {
 		{ Name = "QinShi",             Remote = "Boss",        IsBossType = true  },
 		{ Name = "Gilgamesh",          Remote = "Boss",        IsBossType = true  },
 		{ Name = "BlessedMaiden",      Remote = "Boss",        IsBossType = true  },
+		{ Name = "SaberAlter",         Remote = "Boss",        IsBossType = true  },
 		{ Name = "StrongestinHistory", Remote = "Shinjuku",    IsBossType = true  },
 		{ Name = "StrongestofToday",   Remote = "Shinjuku",    IsBossType = true  },
 		{ Name = "Rimuru",             Remote = "Slime",       IsBossType = true  },
@@ -142,17 +147,15 @@ local CONSTANTS = {
 -- ==========================================
 -- || CLASS: Entity Tracker
 -- ==========================================
--- FIX (leak #4 + #5): Track all per-NPC connections so Destroy() can
--- disconnect them, and guard against Humanoid timeout edge-cases.
 local EntityTracker = {}
 EntityTracker.__index = EntityTracker
 
 function EntityTracker.new(npcsFolder)
 	local self = setmetatable({
 		Folder      = npcsFolder,
-		Active      = {},          -- [npc] = true
-		Connections = {},          -- folder-level connections
-		NPCConns    = {},          -- [npc] = { deathConn, removeConn }  ← FIX
+		Active      = {},
+		Connections = {},
+		NPCConns    = {},
 	}, EntityTracker)
 	self:Init()
 	return self
@@ -165,7 +168,6 @@ function EntityTracker:Register(npc)
 
 		self.Active[npc] = true
 
-		-- FIX: hoist connections so Destroy() can reach them
 		local deathConn, removeConn
 
 		deathConn = humanoid.Died:Connect(function()
@@ -184,7 +186,6 @@ function EntityTracker:Register(npc)
 			end
 		end)
 
-		-- FIX: store so Destroy() can clean up if the NPC is still alive
 		self.NPCConns[npc] = { deathConn, removeConn }
 	end)
 end
@@ -200,13 +201,11 @@ function EntityTracker:Init()
 end
 
 function EntityTracker:Destroy()
-	-- Disconnect folder-level listeners
 	for _, conn in ipairs(self.Connections) do
 		conn:Disconnect()
 	end
 	self.Connections = {}
 
-	-- FIX (leak #4): disconnect all still-live per-NPC connections
 	for _, conns in pairs(self.NPCConns) do
 		for _, c in ipairs(conns) do
 			c:Disconnect()
@@ -220,11 +219,10 @@ function EntityTracker:IsAlive(queryName, isBossType, requiredCount)
 	requiredCount = requiredCount or 5
 	local currentCount = 0
 
-	-- FIX (optimization): single-pass stale removal — no temp table allocation
 	for npc in next, self.Active do
 		if not (npc and npc.Parent) then
 			self.Active[npc]   = nil
-			self.NPCConns[npc] = nil   -- also clear orphaned conn records
+			self.NPCConns[npc] = nil
 		end
 	end
 
@@ -256,7 +254,7 @@ function BossSpawner.new(tracker, remotes)
 	return setmetatable({
 		Tracker       = tracker,
 		Remotes       = remotes,
-		StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" },
+		StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter" },
 		_running      = false,
 	}, BossSpawner)
 end
@@ -271,7 +269,7 @@ function BossSpawner:Start()
 
 	task.spawn(function()
 		while self._running and task.wait(0.5) do
-			local cfg = _G.FarmConfig  -- cache per iteration
+			local cfg = _G.FarmConfig
 
 			if cfg.Boss.AutoSpawn then
 				local anyAlive = false
@@ -389,7 +387,6 @@ function Farmer:CheckArmamentHaki()
 	local char = LocalPlayer.Character
 	if not char then return end
 
-	-- FIX (optimization): compare against the cached constant, not a newly created BrickColor
 	local rightArm      = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
 	local isHakiActive  = rightArm and rightArm.BrickColor == CONSTANTS.HakiBlack
 
@@ -426,7 +423,6 @@ function Farmer:CastSkills(isBoss)
 	local shouldCast = isBoss and cfg.AutoSkill.Bosses or (not isBoss and cfg.AutoSkill.NPCs)
 	if not shouldCast then return end
 
-	-- FIX (optimization): raised throttle from 0.1s → 0.3s (still fast, but less spammy)
 	if tick() - self.LastSkillTime <= 0.3 then return end
 	self.LastSkillTime = tick()
 
@@ -446,9 +442,8 @@ function Farmer:Start()
 	self._running = true
 
 	task.spawn(function()
-		-- FIX (optimization): 0.1s poll is fine — task.wait() (no arg) was 60 ticks/sec for no gain
 		while self._running and task.wait(0.1) do
-			local cfg = _G.FarmConfig   -- cache per iteration
+			local cfg = _G.FarmConfig
 			if not cfg.LoopFarm then continue end
 
 			self:CheckObservationHaki()
@@ -484,7 +479,7 @@ function Farmer:Start()
 						and not cfg.IgnoredEntities[target.Name]
 						and self.Tracker:IsAlive(target.Name, true)
 					do
-						cfg = _G.FarmConfig   -- re-cache; player may have changed settings
+						cfg = _G.FarmConfig
 
 						self:CheckObservationHaki()
 						self:CheckArmamentHaki()
@@ -536,7 +531,7 @@ function Farmer:Start()
 						and not cfg.IgnoredEntities[target.Name]
 						and self.Tracker:IsAlive(target.Name, false, 1)
 					do
-						cfg = _G.FarmConfig  -- re-cache
+						cfg = _G.FarmConfig
 
 						local curChar = LocalPlayer.Character
 						local curHrp  = curChar and curChar:FindFirstChild("HumanoidRootPart")
@@ -547,7 +542,6 @@ function Farmer:Start()
 						self:EquipWeapon(false)
 						self:CastSkills(false)
 
-						-- FIX (optimization): only teleport if far, same pattern as boss loop
 						local distance = (curHrp.Position - spawnCF.Position).Magnitude
 						if distance > 10 then
 							curHrp.CFrame = spawnCF
@@ -582,8 +576,6 @@ function Utility.EnableAutoRejoin()
 	local TeleportService = game:GetService("TeleportService")
 	local GuiService      = game:GetService("GuiService")
 
-	-- FIX (leak #2): store this connection so Cleanup() can disconnect it on re-execution
-	-- FIX (leak #3): replaced deprecated spawn() with task.spawn(); inner loop now guarded
 	local conn = GuiService.ErrorMessageChanged:Connect(function()
 		local cfg = _G.FarmConfig
 		if not cfg.AutoRejoin then return end
@@ -594,7 +586,6 @@ function Utility.EnableAutoRejoin()
 			return
 		end
 
-		-- FIX (leak #3): removed the infinite inner loop — single teleport with retry, not forever
 		task.spawn(function()
 			while task.wait(5) do
 				if pcall(function() TeleportService:Teleport(game.PlaceId, LocalPlayer) end) then
@@ -609,14 +600,11 @@ function Utility.EnableAutoRejoin()
 end
 
 -- ── Timed rejoin ──────────────────────────────────────────────────────────────
--- FIX (leak #1): use a module-level flag so re-execution stops the old loop
---   before starting a new one, preventing zombie loop accumulation.
 local _timedRejoinRunning = false
 
 function Utility.EnableTimedRejoin()
-	-- Signal any previous loop to exit
 	_timedRejoinRunning = false
-	task.wait()   -- yield so the old loop can observe the flag change
+	task.wait()
 
 	_timedRejoinRunning = true
 
@@ -624,7 +612,6 @@ function Utility.EnableTimedRejoin()
 
 	task.spawn(function()
 		local elapsed = 0
-		-- FIX: captured the flag value at spawn-time isn't enough; read the shared upvalue
 		while _timedRejoinRunning and task.wait(1) do
 			local cfg = _G.FarmConfig
 
@@ -723,7 +710,6 @@ function Utility.SetupCharacterEvents(hakiRemote, obsHakiRemote)
 end
 
 function Utility.Cleanup()
-	-- FIX (leak #1): stop the timed rejoin loop before disconnecting everything
 	_timedRejoinRunning = false
 
 	for _, conn in ipairs(_utilityConnections) do
@@ -747,12 +733,123 @@ function Utility.GetWeapons()
 end
 
 -- ==========================================
--- || EXECUTION  (clean previous instances)
+-- || CODE REDEEMER
 -- ==========================================
-if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop() end
-if _G.ArcX_Farmer  then _G.ArcX_Farmer:Stop()  end
+-- Guard: tracks whether auto-redeem has already run this session.
+local _codeRedeemDone = false
+
+local function RedeemCodes()
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+	local ok, CodesConfig = pcall(function()
+		return require(ReplicatedStorage:WaitForChild("CodesConfig", 5))
+	end)
+
+	if not ok or not CodesConfig then
+		warn("[ArcX] Code Redeemer: CodesConfig module not found.")
+		return
+	end
+
+	local CodeRedeem = ReplicatedStorage
+		:WaitForChild("RemoteEvents", 5)
+		:FindFirstChild("CodeRedeem")
+
+	if not CodeRedeem then
+		warn("[ArcX] Code Redeemer: CodeRedeem remote not found.")
+		return
+	end
+
+	print("[ArcX] Starting code auto-redeem...")
+
+	for codeName, _ in pairs(CodesConfig.Codes) do
+		if CodesConfig.IsValid(codeName) then
+			print("[ArcX] Redeeming: " .. codeName)
+
+			local success, serverResponse = pcall(function()
+				return CodeRedeem:InvokeServer(codeName)
+			end)
+
+			if success then
+				print("[ArcX] Response for " .. codeName .. ":", serverResponse)
+			else
+				warn("[ArcX] Error redeeming " .. codeName .. ":", serverResponse)
+			end
+
+			task.wait(0.5)
+		end
+	end
+
+	print("[ArcX] Code auto-redeem finished.")
+end
+
+-- ==========================================
+-- || QUEST MANAGER
+-- ==========================================
+local QuestManager = {}
+QuestManager.__index = QuestManager
+
+function QuestManager.new()
+	return setmetatable({
+		_remote = nil,
+	}, QuestManager)
+end
+
+-- Scans workspace.ServiceNPCs and returns a sorted list of names
+-- that match the pattern "QuestNPC" (e.g. QuestNPC1, QuestNPC15).
+function QuestManager.GetQuestNPCs()
+	local found = {}
+	local serviceNPCs = workspace:FindFirstChild("ServiceNPCs")
+	if not serviceNPCs then return { "None" } end
+
+	for _, child in ipairs(serviceNPCs:GetChildren()) do
+		if child.Name:match("^QuestNPC") then
+			table.insert(found, child.Name)
+		end
+	end
+
+	-- Sort numerically by the trailing number so the dropdown is ordered.
+	table.sort(found, function(a, b)
+		local na = tonumber(a:match("%d+$")) or 0
+		local nb = tonumber(b:match("%d+$")) or 0
+		return na < nb
+	end)
+
+	return #found > 0 and found or { "None" }
+end
+
+function QuestManager:AcceptOnce(npcName)
+	if not npcName or npcName == "None" or npcName == "" then
+		warn("[ArcX] AcceptOnce: No Quest NPC selected.")
+		return false
+	end
+
+	if not self._remote then
+		local re = game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvents")
+		self._remote = re and re:FindFirstChild("QuestAccept")
+	end
+
+	if not self._remote then
+		warn("[ArcX] QuestAccept remote not found.")
+		return false
+	end
+
+	local ok, err = pcall(function()
+		self._remote:FireServer(npcName)
+	end)
+
+	if ok then
+		print("[ArcX] Quest accepted from " .. npcName)
+		return true
+	else
+		warn("[ArcX] Quest accept failed:", err)
+		return false
+	end
+end
+
+if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop()    end
+if _G.ArcX_Farmer  then _G.ArcX_Farmer:Stop()     end
 if _G.ArcX_Tracker then _G.ArcX_Tracker:Destroy() end
-Utility.Cleanup()  -- also stops _timedRejoinRunning via the flag
+Utility.Cleanup()
 
 if _G.ArcX_Window then
 	pcall(function() _G.ArcX_Window:Destroy() end)
@@ -779,15 +876,16 @@ local GameRemotes = {
 	ObservationHaki = RemoteEvents:WaitForChild("ObservationHakiRemote"),
 }
 
-local Tracker  = EntityTracker.new(workspace:WaitForChild("NPCs"))
-local Spawner  = BossSpawner.new(Tracker, GameRemotes)
-local AutoFarm = Farmer.new(
+local Tracker    = EntityTracker.new(workspace:WaitForChild("NPCs"))
+local Spawner    = BossSpawner.new(Tracker, GameRemotes)
+local AutoFarm   = Farmer.new(
 	Tracker,
 	GameRemotes.Teleport,
 	AbilityRemote,
 	GameRemotes.ObservationHaki,
 	GameRemotes.Haki
 )
+local AutoQuest  = QuestManager.new()
 
 _G.ArcX_Tracker = Tracker
 _G.ArcX_Spawner = Spawner
@@ -827,11 +925,12 @@ local Window = Fluent:CreateWindow({
 _G.ArcX_Window = Window
 
 local Tabs = {
-	Main     = Window:AddTab({ Title = "Main",            Icon = "home"     }),
-	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "swords"   }),
-	Bosses   = Window:AddTab({ Title = "Standard Bosses", Icon = "skull"    }),
-	Specials = Window:AddTab({ Title = "Special Bosses",  Icon = "star"     }),
-	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings" }),
+	Main     = Window:AddTab({ Title = "Main",            Icon = "home"       }),
+	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "swords"     }),
+	Bosses   = Window:AddTab({ Title = "Standard Bosses", Icon = "skull"      }),
+	Specials = Window:AddTab({ Title = "Special Bosses",  Icon = "star"       }),
+	Misc     = Window:AddTab({ Title = "Misc",            Icon = "gift"       }),
+	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings"   }),
 }
 
 -- ── Main Tab ──────────────────────────────────────────────────────────────────
@@ -917,7 +1016,7 @@ Tabs.Mobs:AddParagraph({ Title = "Entity Targeting", Content = "Enable the entit
 local EntityCategories = {
 	{ Name = "NPCs",          List = { "Hollow", "Quincy", "Swordsman", "AcademyTeacher", "Slime", "StrongSorcerer", "Curse" } },
 	{ Name = "Timed Bosses",  List = { "Gojo", "Yuji", "Sukuna", "Jinwoo", "Alucard", "Aizen", "Yamato" } },
-	{ Name = "Summon Bosses", List = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "StrongestinHistory", "StrongestofToday", "Rimuru", "Anos", "TrueAizen" } },
+	{ Name = "Summon Bosses", List = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter", "StrongestinHistory", "StrongestofToday", "Rimuru", "Anos", "TrueAizen" } },
 }
 
 for _, category in ipairs(EntityCategories) do
@@ -936,14 +1035,14 @@ Tabs.Bosses:AddToggle("Toggle_AutoSpawn", { Title = "Auto-Spawn Bosses", Default
 
 Tabs.Bosses:AddDropdown("Dropdown_SelectedBoss", {
 	Title   = "Select Boss",
-	Values  = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden" },
+	Values  = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter" },
 	Multi   = false,
 	Default = 1,
 }):OnChanged(function(v) Config.Boss.Selected = v end)
 
 Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
 	Title   = "Difficulty",
-	Values  = { "Normal", "Hard", "Extreme" },
+	Values  = { "Normal", "Medium", "Hard", "Extreme" },
 	Multi   = false,
 	Default = 1,
 }):OnChanged(function(v) Config.Boss.Difficulty = v end)
@@ -951,7 +1050,7 @@ Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
 -- ── Specials Tab ──────────────────────────────────────────────────────────────
 Tabs.Specials:AddParagraph({ Title = "Special Boss Spawners", Content = "Configure auto-spawning for special bosses." })
 
-local difficultyLevels = { "Normal", "Hard", "Extreme" }
+local difficultyLevels = { "Normal", "Medium", "Hard", "Extreme" }
 
 for bossName, bossData in pairs(Config.Specials) do
 	Tabs.Specials:AddToggle("Special_" .. bossName, {
@@ -966,6 +1065,57 @@ for bossName, bossData in pairs(Config.Specials) do
 		Default = 1,
 	}):OnChanged(function(v) Config.Specials[bossName].Diff = v end)
 end
+
+-- ── Misc Tab ──────────────────────────────────────────────────────────────────
+Tabs.Misc:AddSection("Code Redeemer")
+
+Tabs.Misc:AddButton({
+	Title    = "Redeem Active Codes",
+	Callback = function()
+		task.spawn(function()
+			RedeemCodes()
+		end)
+	end,
+})
+
+-- ── Get Quest Section ─────────────────────────────────────────────────────────
+Tabs.Misc:AddSection("Get Quest")
+
+-- Populate dropdown from workspace.ServiceNPCs at load time.
+local questNPCList = QuestManager.GetQuestNPCs()
+
+local QuestNPCDropdown = Tabs.Misc:AddDropdown("Dropdown_QuestNPC", {
+	Title   = "Quest NPC",
+	Values  = questNPCList,
+	Multi   = false,
+	Default = questNPCList[1],
+}):OnChanged(function(v)
+	Config.AutoQuest.SelectedNPC = v
+end)
+-- Sync default into config
+Config.AutoQuest.SelectedNPC = questNPCList[1]
+
+Tabs.Misc:AddButton({
+	Title    = "Refresh Quest NPC List",
+	Callback = function()
+		local fresh = QuestManager.GetQuestNPCs()
+		pcall(function() Fluent.Options["Dropdown_QuestNPC"]:SetValues(fresh) end)
+		Fluent:Notify({
+			Title    = "ArcX Quest",
+			Content  = "Found " .. #fresh .. " Quest NPC(s).",
+			Duration = 3,
+		})
+	end,
+})
+
+Tabs.Misc:AddButton({
+	Title    = "Get Quest",
+	Callback = function()
+		task.spawn(function()
+			AutoQuest:AcceptOnce(Config.AutoQuest.SelectedNPC)
+		end)
+	end,
+})
 
 -- ── Settings Tab ──────────────────────────────────────────────────────────────
 Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
@@ -1037,6 +1187,15 @@ Window:SelectTab(1)
 -- Start loops AFTER Fluent is loaded so Fluent.Options is never nil
 Spawner:Start()
 AutoFarm:Start()
+
+-- ── Auto-redeem on load (once per session) ────────────────────────────────────
+if not _codeRedeemDone then
+	_codeRedeemDone = true
+	task.spawn(function()
+		task.wait(2)
+		RedeemCodes()
+	end)
+end
 
 Fluent:Notify({
 	Title    = "ArcX 💀🥀",
