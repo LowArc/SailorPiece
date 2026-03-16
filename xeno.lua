@@ -77,6 +77,10 @@ local Config = {
 	AutoQuest = {
 		SelectedNPC = "None",
 	},
+	AutoCraft = {
+		SlimeKey = false,
+		DivineGrail = false,
+	},
 }
 
 _G.FarmConfig = Config
@@ -142,6 +146,56 @@ local CONSTANTS = {
 		{ Name = "Anos",               Remote = "Academy",     IsBossType = true  },
 		{ Name = "TrueAizen",          Remote = "SoulSociety", IsBossType = true  },
 	},
+
+	CraftingSets = {
+		SukunaV2 = {
+			Items = {
+				{"Malevolent Soul", 3},
+				{"Awakened Cursed Finger", 20},
+				{"Cursed Flesh", 1},
+				{"Vessel Ring", 7}
+			},
+			SkillUnlock = {"Shrine Domain Shard", 1}
+		},
+		TrueAizen = {
+			Items = {
+				{"Transcendent Core", 5},
+				{"Evolution Fragment", 1},
+				{"Divinity Essence", 8},
+				{"Fusion Ring", 15},
+				{"Chrysalis Sigil", 75}
+			}
+		},
+		GojoV2 = {
+			Items = {
+				{"Infinity Trait", 1},
+				{"Blue Singularity", 3}
+			},
+			SkillUnlock = {"Infinity Domain Shard", 1}
+		},
+		BlessedMaiden = {
+			Items = {
+				{"Aero Core", 3},
+				{"Celestial Mark", 1},
+				{"Gale Essence", 8},
+				{"Tide Remnant", 14},
+				{"Tempest Relic", 25}
+			},
+			SkillUnlock = {
+				{"Celestial Mark", 2},
+				{"Aero Core", 8},
+				{"Tempest Relic", 25}
+			}
+		},
+		Aizen = {
+			Items = {
+				{"Hōgyoku Fragment", 1},
+				{"Reiatsu Core", 3},
+				{"Illusion Prism", 6},
+				{"Mirage Pendant", 10}
+			}
+		}
+	}
 }
 
 -- ==========================================
@@ -913,8 +967,8 @@ local InterfaceManager = loadstring(
 )()
 
 local Window = Fluent:CreateWindow({
-	Title       = "ArcX 💀🥀 | ",
-	SubTitle    = "Best Script of All Time???",
+	Title       = "ArcX ",
+	SubTitle    = "| Developer",
 	TabWidth    = 160,
 	Size        = UDim2.fromOffset(580, 460),
 	Acrylic     = true,
@@ -1077,55 +1131,6 @@ for bossName, bossData in pairs(Config.Specials) do
 end
 
 -- ── Crafting Tab ──────────────────────────────────────────────────────────────
-local CraftingSets = {
-	SukunaV2 = {
-		Items = {
-			{"Malevolent Soul", 3},
-			{"Awakened Cursed Finger", 20},
-			{"Cursed Flesh", 1},
-			{"Vessel Ring", 7}
-		},
-		SkillUnlock = {"Shrine Domain Shard", 1}
-	},
-	TrueAizen = {
-		Items = {
-			{"Transcendent Core", 5},
-			{"Evolution Fragment", 1},
-			{"Divinity Essence", 8},
-			{"Fusion Ring", 15},
-			{"Chrysalis Sigil", 75}
-		}
-	},
-	GojoV2 = {
-		Items = {
-			{"Infinity Trait", 1},
-			{"Blue Singularity", 3}
-		},
-		SkillUnlock = {"Infinity Domain Shard", 1}
-	},
-	BlessedMaiden = {
-		Items = {
-			{"Aero Core", 3},
-			{"Celestial Mark", 1},
-			{"Gale Essence", 8},
-			{"Tide Remnant", 14},
-			{"Tempest Relic", 25}
-		},
-		SkillUnlock = {
-			{"Celestial Mark", 2},
-			{"Aero Core", 8},
-			{"Tempest Relic", 25}
-		}
-	},
-	Aizen = {
-		Items = {
-			{"Hōgyoku Fragment", 1},
-			{"Reiatsu Core", 3},
-			{"Illusion Prism", 6},
-			{"Mirage Pendant", 10}
-		}
-	}
-}
 
 local function GetItemQuantity(itemName)
 	local player = game:GetService("Players").LocalPlayer
@@ -1160,7 +1165,7 @@ local function GetItemQuantity(itemName)
 end
 
 local function CheckSetAmount(setName)
-	local setInfo = CraftingSets[setName]
+	local setInfo = CONSTANTS.CraftingSets[setName]
 	if not setInfo or not setInfo.Items then return 0 end
 
 	local reqs = setInfo.Items
@@ -1180,7 +1185,7 @@ end
 Tabs.Crafting:AddParagraph({ Title = "Crafting Calculator", Content = "⚠️ You must open inventory in items tabs only. And make every materials visible." })
 
 local craftingSetKeys = {}
-for k, _ in pairs(CraftingSets) do table.insert(craftingSetKeys, k) end
+for k, _ in pairs(CONSTANTS.CraftingSets) do table.insert(craftingSetKeys, k) end
 
 local selectedSet = "SukunaV2"
 Tabs.Crafting:AddDropdown("Dropdown_CraftingSet", {
@@ -1200,7 +1205,7 @@ local setAmountParagraph = Tabs.Crafting:AddParagraph({
 Tabs.Crafting:AddButton({
 	Title = "Check Amount",
 	Callback = function()
-		local setInfo = CraftingSets[selectedSet]
+		local setInfo = CONSTANTS.CraftingSets[selectedSet]
 		if not setInfo then return end
 
 		local amount = CheckSetAmount(selectedSet)
@@ -1247,6 +1252,91 @@ Tabs.Crafting:AddButton({
 		})
 	end
 })
+
+Tabs.Crafting:AddSection("Craft Items")
+
+local craftAmount = 1
+Tabs.Crafting:AddInput("Input_CraftAmount", {
+	Title = "Amount to Craft",
+	Default = "1",
+	Numeric = true,
+	Finished = false,
+	Callback = function(v)
+		local num = tonumber(v)
+		if num and num > 0 then
+			craftAmount = num
+		else
+			craftAmount = 1
+		end
+	end
+})
+
+Tabs.Crafting:AddButton({
+	Title = "Craft SlimeKey",
+	Callback = function()
+		task.spawn(function()
+			local args = { "SlimeKey", craftAmount }
+			local ok, err = pcall(function()
+				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestSlimeCraft"):InvokeServer(unpack(args))
+			end)
+			if ok then
+				Fluent:Notify({ Title = "Crafting", Content = "Requested " .. craftAmount .. "x SlimeKey.", Duration = 3 })
+			else
+				warn("[ArcX] SlimeKey Craft Error:", err)
+			end
+		end)
+	end
+})
+
+Tabs.Crafting:AddButton({
+	Title = "Craft Divine Grail",
+	Callback = function()
+		task.spawn(function()
+			local args = { "DivineGrail", craftAmount }
+			local ok, err = pcall(function()
+				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestGrailCraft"):InvokeServer(unpack(args))
+			end)
+			if ok then
+				Fluent:Notify({ Title = "Crafting", Content = "Requested " .. craftAmount .. "x Divine Grail.", Duration = 3 })
+			else
+				warn("[ArcX] Divine Grail Craft Error:", err)
+			end
+		end)
+	end
+})
+
+Tabs.Crafting:AddSection("Auto Crafting")
+
+Tabs.Crafting:AddToggle("Toggle_AutoCraftSlimeKey", { 
+	Title = "Auto Craft SlimeKey", 
+	Default = Config.AutoCraft.SlimeKey 
+}):OnChanged(function(v) 
+	Config.AutoCraft.SlimeKey = v 
+end)
+
+Tabs.Crafting:AddToggle("Toggle_AutoCraftDivineGrail", { 
+	Title = "Auto Craft Divine Grail", 
+	Default = Config.AutoCraft.DivineGrail 
+}):OnChanged(function(v) 
+	Config.AutoCraft.DivineGrail = v 
+end)
+
+task.spawn(function()
+	while task.wait(5) do
+		if Config.AutoCraft.SlimeKey then
+			pcall(function()
+				local args = { "SlimeKey", 1 }
+				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestSlimeCraft"):InvokeServer(unpack(args))
+			end)
+		end
+		if Config.AutoCraft.DivineGrail then
+			pcall(function()
+				local args = { "DivineGrail", 1 }
+				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestGrailCraft"):InvokeServer(unpack(args))
+			end)
+		end
+	end
+end)
 
 -- ── Misc Tab ──────────────────────────────────────────────────────────────────
 Tabs.Misc:AddSection("Code Redeemer")
