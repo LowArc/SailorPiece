@@ -3,7 +3,7 @@
 -- ==========================================
 repeat task.wait() until game:IsLoaded()
 
-local Players    = game:GetService("Players")
+local Players     = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
 repeat task.wait()
@@ -57,7 +57,7 @@ local Config = {
 	},
 	Boss = {
 		AutoSpawn  = false,
-		Selected   = "Saber",
+		Selected   = {}, -- Fluent multi-select populates this as { BossName = true, ... }
 		Difficulty = "Normal",
 	},
 	Specials = {
@@ -68,14 +68,14 @@ local Config = {
 		Anos      = { Auto = false, Diff = "Normal" },
 	},
 	AutoSkill = {
-		Bosses    = false,
-		NPCs      = false,
+		Bosses     = false,
+		NPCs       = false,
 		BossSkills = {},
 		NPCSkills  = {},
 		SkillIds   = { Z = 1, X = 2, C = 3, V = 4, F = 5 },
 	},
 	AutoQuest = {
-		SelectedNPC  = "None",
+		SelectedNPC = "None",
 	},
 }
 
@@ -94,7 +94,7 @@ local CONSTANTS = {
 		AcademyTeacher     = CFrame.new( 1081,   2,    1279),
 		Slime              = CFrame.new(-1123,  14,     366),
 		StrongSorcerer     = CFrame.new(  664,   2,   -1697),
-		Curse			   = CFrame.new(  -16,   2,   -1845),
+		Curse              = CFrame.new(  -16,   2,   -1845),
 		Gojo               = CFrame.new( 1858.32, 12.98,  338.14),
 		Yuji               = CFrame.new( 1537.92,  9.98,  226.10),
 		Sukuna             = CFrame.new( 1571.26, 77.22,  -34.11),
@@ -252,10 +252,9 @@ BossSpawner.__index = BossSpawner
 
 function BossSpawner.new(tracker, remotes)
 	return setmetatable({
-		Tracker       = tracker,
-		Remotes       = remotes,
-		StandardBosses = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter" },
-		_running      = false,
+		Tracker  = tracker,
+		Remotes  = remotes,
+		_running = false,
 	}, BossSpawner)
 end
 
@@ -271,33 +270,36 @@ function BossSpawner:Start()
 		while self._running and task.wait(0.5) do
 			local cfg = _G.FarmConfig
 
+			-- ── Multi-select Standard Boss spawning ──────────────────────────
+			-- Fluent multi-select returns a dict: { BossName = true, ... }
+			-- We iterate with pairs() and only act on entries where value == true
 			if cfg.Boss.AutoSpawn then
-				local anyAlive = false
-				for _, bName in ipairs(self.StandardBosses) do
-					if self.Tracker:IsAlive(bName, true) then
-						anyAlive = true
-						break
+				local selected = cfg.Boss.Selected
+				if type(selected) == "table" then
+					for bName, enabled in pairs(selected) do
+						if enabled == true and not self.Tracker:IsAlive(bName, true) then
+							self.Remotes.SummonBoss:FireServer(bName .. "Boss", cfg.Boss.Difficulty)
+							task.wait(0.3)
+						end
 					end
-				end
-				if not anyAlive then
-					self.Remotes.SummonBoss:FireServer(cfg.Boss.Selected .. "Boss", cfg.Boss.Difficulty)
 				end
 			end
 
+			-- ── Special Bosses ───────────────────────────────────────────────
 			local specs = cfg.Specials
-			if specs.TrueAizen.Auto and not self.Tracker:IsAlive("TrueAizen",          true) then
+			if specs.TrueAizen.Auto and not self.Tracker:IsAlive("TrueAizen", true) then
 				self.Remotes.TrueAizen:FireServer(specs.TrueAizen.Diff)
 			end
-			if specs.Sukuna.Auto and not self.Tracker:IsAlive("StrongestinHistory",     true) then
+			if specs.Sukuna.Auto and not self.Tracker:IsAlive("StrongestinHistory", true) then
 				self.Remotes.SpawnStrongest:FireServer("StrongestHistory", specs.Sukuna.Diff)
 			end
-			if specs.Gojo.Auto and not self.Tracker:IsAlive("StrongestofToday",         true) then
-				self.Remotes.SpawnStrongest:FireServer("StrongestToday",   specs.Gojo.Diff)
+			if specs.Gojo.Auto and not self.Tracker:IsAlive("StrongestofToday", true) then
+				self.Remotes.SpawnStrongest:FireServer("StrongestToday", specs.Gojo.Diff)
 			end
-			if specs.Rimuru.Auto and not self.Tracker:IsAlive("Rimuru",                 true) then
+			if specs.Rimuru.Auto and not self.Tracker:IsAlive("Rimuru", true) then
 				self.Remotes.Rimuru:FireServer(specs.Rimuru.Diff)
 			end
-			if specs.Anos.Auto and not self.Tracker:IsAlive("Anos",                     true) then
+			if specs.Anos.Auto and not self.Tracker:IsAlive("Anos", true) then
 				self.Remotes.Anos:FireServer("Anos", specs.Anos.Diff)
 			end
 		end
@@ -312,12 +314,12 @@ Farmer.__index = Farmer
 
 function Farmer.new(tracker, tpRemote, abilityRemote, obsHakiRemote, hakiRemote)
 	return setmetatable({
-		Tracker           = tracker,
-		TpRemote          = tpRemote,
-		AbilityRemote     = abilityRemote,
-		ObsHakiRemote     = obsHakiRemote,
-		HakiRemote        = hakiRemote,
-		LastSkillTime     = 0,
+		Tracker            = tracker,
+		TpRemote           = tpRemote,
+		AbilityRemote      = abilityRemote,
+		ObsHakiRemote      = obsHakiRemote,
+		HakiRemote         = hakiRemote,
+		LastSkillTime      = 0,
 		LastEquipTime_NPC  = 0,
 		LastEquipTime_Boss = 0,
 		LastArmamentToggle = 0,
@@ -344,7 +346,7 @@ function Farmer:EquipWeapon(isBoss)
 	end
 
 	local weaponName = isBoss and cfg.SelectedWeapon_Boss or cfg.SelectedWeapon_NPC
-	local dropdownId  = isBoss and "Dropdown_WeaponBoss" or "Dropdown_WeaponNPC"
+	local dropdownId = isBoss and "Dropdown_WeaponBoss" or "Dropdown_WeaponNPC"
 
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -387,8 +389,8 @@ function Farmer:CheckArmamentHaki()
 	local char = LocalPlayer.Character
 	if not char then return end
 
-	local rightArm      = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
-	local isHakiActive  = rightArm and rightArm.BrickColor == CONSTANTS.HakiBlack
+	local rightArm     = char:FindFirstChild("Right Arm") or char:FindFirstChild("RightHand")
+	local isHakiActive = rightArm and rightArm.BrickColor == CONSTANTS.HakiBlack
 
 	if not isHakiActive then
 		self.LastArmamentToggle = now
@@ -401,13 +403,13 @@ function Farmer:CheckObservationHaki()
 	if not cfg.AutoObservationHaki then return end
 	if tick() - self.LastObsToggle < 3 then return end
 
-	local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-	local dodgeUI   = playerGui and playerGui:FindFirstChild("DodgeCounterUI")
-	local isVisible = dodgeUI
+	local playerGui  = LocalPlayer:FindFirstChild("PlayerGui")
+	local dodgeUI    = playerGui and playerGui:FindFirstChild("DodgeCounterUI")
+	local isVisible  = dodgeUI
 		and dodgeUI:FindFirstChild("MainFrame")
 		and dodgeUI.MainFrame.Visible
 
-	local cdUI      = playerGui and playerGui:FindFirstChild("CooldownUI")
+	local cdUI       = playerGui and playerGui:FindFirstChild("CooldownUI")
 	local onCooldown = cdUI
 		and cdUI:FindFirstChild("MainFrame")
 		and cdUI.MainFrame:FindFirstChild("Cooldown_ObsHaki_Observation") ~= nil
@@ -605,7 +607,6 @@ local _timedRejoinRunning = false
 function Utility.EnableTimedRejoin()
 	_timedRejoinRunning = false
 	task.wait()
-
 	_timedRejoinRunning = true
 
 	local TeleportService = game:GetService("TeleportService")
@@ -629,8 +630,8 @@ function Utility.EnableTimedRejoin()
 
 				pcall(function()
 					Fluent:Notify({
-						Title   = "ArcX Timed Rejoin",
-						Content = "Rejoining now (" .. (cfg.RejoinDelay or 10) .. " min timer)...",
+						Title    = "ArcX Timed Rejoin",
+						Content  = "Rejoining now (" .. (cfg.RejoinDelay or 10) .. " min timer)...",
 						Duration = 5,
 					})
 				end)
@@ -735,7 +736,6 @@ end
 -- ==========================================
 -- || CODE REDEEMER
 -- ==========================================
--- Guard: tracks whether auto-redeem has already run this session.
 local _codeRedeemDone = false
 
 local function RedeemCodes()
@@ -789,13 +789,9 @@ local QuestManager = {}
 QuestManager.__index = QuestManager
 
 function QuestManager.new()
-	return setmetatable({
-		_remote = nil,
-	}, QuestManager)
+	return setmetatable({ _remote = nil }, QuestManager)
 end
 
--- Scans workspace.ServiceNPCs and returns a sorted list of names
--- that match the pattern "QuestNPC" (e.g. QuestNPC1, QuestNPC15).
 function QuestManager.GetQuestNPCs()
 	local found = {}
 	local serviceNPCs = workspace:FindFirstChild("ServiceNPCs")
@@ -807,7 +803,6 @@ function QuestManager.GetQuestNPCs()
 		end
 	end
 
-	-- Sort numerically by the trailing number so the dropdown is ordered.
 	table.sort(found, function(a, b)
 		local na = tonumber(a:match("%d+$")) or 0
 		local nb = tonumber(b:match("%d+$")) or 0
@@ -846,6 +841,9 @@ function QuestManager:AcceptOnce(npcName)
 	end
 end
 
+-- ==========================================
+-- || CLEANUP PREVIOUS INSTANCES
+-- ==========================================
 if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop()    end
 if _G.ArcX_Farmer  then _G.ArcX_Farmer:Stop()     end
 if _G.ArcX_Tracker then _G.ArcX_Tracker:Destroy() end
@@ -856,7 +854,9 @@ if _G.ArcX_Window then
 	_G.ArcX_Window = nil
 end
 
--- Remote setup
+-- ==========================================
+-- || REMOTE SETUP
+-- ==========================================
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes           = ReplicatedStorage:WaitForChild("Remotes")
 local RemoteEvents      = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -876,16 +876,16 @@ local GameRemotes = {
 	ObservationHaki = RemoteEvents:WaitForChild("ObservationHakiRemote"),
 }
 
-local Tracker    = EntityTracker.new(workspace:WaitForChild("NPCs"))
-local Spawner    = BossSpawner.new(Tracker, GameRemotes)
-local AutoFarm   = Farmer.new(
+local Tracker   = EntityTracker.new(workspace:WaitForChild("NPCs"))
+local Spawner   = BossSpawner.new(Tracker, GameRemotes)
+local AutoFarm  = Farmer.new(
 	Tracker,
 	GameRemotes.Teleport,
 	AbilityRemote,
 	GameRemotes.ObservationHaki,
 	GameRemotes.Haki
 )
-local AutoQuest  = QuestManager.new()
+local AutoQuest = QuestManager.new()
 
 _G.ArcX_Tracker = Tracker
 _G.ArcX_Spawner = Spawner
@@ -925,12 +925,13 @@ local Window = Fluent:CreateWindow({
 _G.ArcX_Window = Window
 
 local Tabs = {
-	Main     = Window:AddTab({ Title = "Main",            Icon = "home"       }),
-	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "swords"     }),
-	Bosses   = Window:AddTab({ Title = "Standard Bosses", Icon = "skull"      }),
-	Specials = Window:AddTab({ Title = "Special Bosses",  Icon = "star"       }),
-	Misc     = Window:AddTab({ Title = "Misc",            Icon = "gift"       }),
-	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings"   }),
+	Main     = Window:AddTab({ Title = "Main",            Icon = "home"     }),
+	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "swords"   }),
+	Bosses   = Window:AddTab({ Title = "Standard Bosses", Icon = "skull"    }),
+	Specials = Window:AddTab({ Title = "Special Bosses",  Icon = "star"     }),
+	Crafting = Window:AddTab({ Title = "Crafting",        Icon = "hammer"   }),
+	Misc     = Window:AddTab({ Title = "Misc",            Icon = "gift"     }),
+	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings" }),
 }
 
 -- ── Main Tab ──────────────────────────────────────────────────────────────────
@@ -1030,15 +1031,24 @@ for _, category in ipairs(EntityCategories) do
 end
 
 -- ── Bosses Tab ────────────────────────────────────────────────────────────────
+Tabs.Bosses:AddParagraph({
+	Title   = "Standard Boss Spawner",
+	Content = "Select one or more bosses. Each selected boss will be spawned independently when not alive.",
+})
+
 Tabs.Bosses:AddToggle("Toggle_AutoSpawn", { Title = "Auto-Spawn Bosses", Default = Config.Boss.AutoSpawn })
 	:OnChanged(function(v) Config.Boss.AutoSpawn = v end)
 
+-- Multi = true → Fluent fires OnChanged with { BossName = true, ... } (dict, not array)
+-- BossSpawner uses pairs() to iterate so this works correctly
 Tabs.Bosses:AddDropdown("Dropdown_SelectedBoss", {
-	Title   = "Select Boss",
+	Title   = "Select Bosses (Multi)",
 	Values  = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter" },
-	Multi   = false,
-	Default = 1,
-}):OnChanged(function(v) Config.Boss.Selected = v end)
+	Multi   = true,
+	Default = {},
+}):OnChanged(function(v)
+	Config.Boss.Selected = v
+end)
 
 Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
 	Title   = "Difficulty",
@@ -1066,25 +1076,193 @@ for bossName, bossData in pairs(Config.Specials) do
 	}):OnChanged(function(v) Config.Specials[bossName].Diff = v end)
 end
 
+-- ── Crafting Tab ──────────────────────────────────────────────────────────────
+local CraftingSets = {
+	SukunaV2 = {
+		Items = {
+			{"Malevolent Soul", 3},
+			{"Awakened Cursed Finger", 20},
+			{"Cursed Flesh", 1},
+			{"Vessel Ring", 7}
+		},
+		SkillUnlock = {"Shrine Domain Shard", 1}
+	},
+	TrueAizen = {
+		Items = {
+			{"Transcendent Core", 5},
+			{"Evolution Fragment", 1},
+			{"Divinity Essence", 8},
+			{"Fusion Ring", 15},
+			{"Chrysalis Sigil", 75}
+		}
+	},
+	GojoV2 = {
+		Items = {
+			{"Infinity Trait", 1},
+			{"Blue Singularity", 3}
+		},
+		SkillUnlock = {"Infinity Domain Shard", 1}
+	},
+	BlessedMaiden = {
+		Items = {
+			{"Aero Core", 3},
+			{"Celestial Mark", 1},
+			{"Gale Essence", 8},
+			{"Tide Remnant", 14},
+			{"Tempest Relic", 25}
+		},
+		SkillUnlock = {
+			{"Celestial Mark", 2},
+			{"Aero Core", 8},
+			{"Tempest Relic", 25}
+		}
+	},
+	Aizen = {
+		Items = {
+			{"Hōgyoku Fragment", 1},
+			{"Reiatsu Core", 3},
+			{"Illusion Prism", 6},
+			{"Mirage Pendant", 10}
+		}
+	}
+}
+
+local function GetItemQuantity(itemName)
+	local player = game:GetService("Players").LocalPlayer
+	local playerGui = player:FindFirstChild("PlayerGui")
+	if not playerGui then return 0 end
+	
+	local inventoryUI = playerGui:FindFirstChild("InventoryPanelUI")
+	if not inventoryUI then return 0 end
+	
+	local storage = inventoryUI:FindFirstChild("MainFrame")
+		and inventoryUI.MainFrame:FindFirstChild("Frame")
+		and inventoryUI.MainFrame.Frame:FindFirstChild("Content")
+		and inventoryUI.MainFrame.Frame.Content:FindFirstChild("Holder")
+		and inventoryUI.MainFrame.Frame.Content.Holder:FindFirstChild("StorageHolder")
+		and inventoryUI.MainFrame.Frame.Content.Holder.StorageHolder:FindFirstChild("Storage")
+		
+	if not storage then return 0 end
+
+	local itemFrame = storage:FindFirstChild("Item_" .. itemName)
+	if not itemFrame then return 0 end
+
+	local quantityText = itemFrame:FindFirstChild("Slot")
+		and itemFrame.Slot:FindFirstChild("Holder")
+		and itemFrame.Slot.Holder:FindFirstChild("Quantity")
+		
+	if quantityText and (quantityText:IsA("TextLabel") or quantityText:IsA("TextBox")) then
+		local text = quantityText.Text
+		local num = text:match("x(%d+)") or text:match("%d+")
+		return tonumber(num) or 0
+	end
+	return 0
+end
+
+local function CheckSetAmount(setName)
+	local setInfo = CraftingSets[setName]
+	if not setInfo or not setInfo.Items then return 0 end
+
+	local reqs = setInfo.Items
+	local maxSets = math.huge
+	for _, req in ipairs(reqs) do
+		local itemName = req[1]
+		local requiredAmt = req[2]
+		local hasAmt = GetItemQuantity(itemName)
+		local canMake = math.floor(hasAmt / requiredAmt)
+		if canMake < maxSets then
+			maxSets = canMake
+		end
+	end
+	return maxSets == math.huge and 0 or maxSets
+end
+
+Tabs.Crafting:AddParagraph({ Title = "Crafting Calculator", Content = "⚠️ You must open inventory in items tabs only. And make every materials visible." })
+
+local craftingSetKeys = {}
+for k, _ in pairs(CraftingSets) do table.insert(craftingSetKeys, k) end
+
+local selectedSet = "SukunaV2"
+Tabs.Crafting:AddDropdown("Dropdown_CraftingSet", {
+	Title = "Select Set",
+	Values = craftingSetKeys,
+	Multi = false,
+	Default = selectedSet,
+}):OnChanged(function(v)
+	selectedSet = v
+end)
+
+local setAmountParagraph = Tabs.Crafting:AddParagraph({
+	Title = "Craftable Amount",
+	Content = "Can create: 0 sets\n(Select a set and check amount)"
+})
+
+Tabs.Crafting:AddButton({
+	Title = "Check Amount",
+	Callback = function()
+		local setInfo = CraftingSets[selectedSet]
+		if not setInfo then return end
+
+		local amount = CheckSetAmount(selectedSet)
+		local details = "Can create: " .. amount .. " sets\n"
+		
+		if setInfo.Items then
+			for _, req in ipairs(setInfo.Items) do
+				local itemName = req[1]
+				local requiredAmt = req[2]
+				local hasAmt = GetItemQuantity(itemName)
+				details = details .. "\n- " .. itemName .. ": " .. hasAmt .. " / " .. requiredAmt
+			end
+		end
+
+		if setInfo.SkillUnlock then
+			details = details .. "\n\nSkill Unlock:"
+			
+			-- Check if SkillUnlock is a list of lists (multiple items) or a single item list
+			if type(setInfo.SkillUnlock[1]) == "table" then
+				for _, unlockReq in ipairs(setInfo.SkillUnlock) do
+					local unlockItem = unlockReq[1]
+					local unlockReqAmt = unlockReq[2]
+					local unlockHasAmt = GetItemQuantity(unlockItem)
+					local status = unlockHasAmt >= unlockReqAmt and "✅" or "❌"
+					details = details .. "\n- " .. unlockItem .. ": " .. unlockHasAmt .. " / " .. unlockReqAmt .. " " .. status
+				end
+			else
+				local unlockItem = setInfo.SkillUnlock[1]
+				local unlockReqAmt = setInfo.SkillUnlock[2]
+				local unlockHasAmt = GetItemQuantity(unlockItem)
+				local status = unlockHasAmt >= unlockReqAmt and "✅ (Unlocked)" or "❌ (Locked)"
+				details = details .. "\n- " .. unlockItem .. ": " .. unlockHasAmt .. " / " .. unlockReqAmt .. " " .. status
+			end
+		end
+		
+		if setAmountParagraph.SetDesc then
+			setAmountParagraph:SetDesc(details)
+		end
+		
+		Fluent:Notify({
+			Title = "Crafting Check",
+			Content = "You can create " .. amount .. " " .. selectedSet .. " sets.",
+			Duration = 3,
+		})
+	end
+})
+
 -- ── Misc Tab ──────────────────────────────────────────────────────────────────
 Tabs.Misc:AddSection("Code Redeemer")
 
 Tabs.Misc:AddButton({
 	Title    = "Redeem Active Codes",
 	Callback = function()
-		task.spawn(function()
-			RedeemCodes()
-		end)
+		task.spawn(RedeemCodes)
 	end,
 })
 
--- ── Get Quest Section ─────────────────────────────────────────────────────────
 Tabs.Misc:AddSection("Get Quest")
 
--- Populate dropdown from workspace.ServiceNPCs at load time.
 local questNPCList = QuestManager.GetQuestNPCs()
 
-local QuestNPCDropdown = Tabs.Misc:AddDropdown("Dropdown_QuestNPC", {
+Tabs.Misc:AddDropdown("Dropdown_QuestNPC", {
 	Title   = "Quest NPC",
 	Values  = questNPCList,
 	Multi   = false,
@@ -1092,7 +1270,6 @@ local QuestNPCDropdown = Tabs.Misc:AddDropdown("Dropdown_QuestNPC", {
 }):OnChanged(function(v)
 	Config.AutoQuest.SelectedNPC = v
 end)
--- Sync default into config
 Config.AutoQuest.SelectedNPC = questNPCList[1]
 
 Tabs.Misc:AddButton({
@@ -1175,7 +1352,6 @@ Tabs.Settings:AddSlider("Slider_RejoinDelay", {
 -- ── SaveManager / InterfaceManager ────────────────────────────────────────────
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
-SaveManager:IgnoreThemeSettings()
 InterfaceManager:SetFolder("ArcX")
 SaveManager:SetFolder("ArcX/configs")
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
