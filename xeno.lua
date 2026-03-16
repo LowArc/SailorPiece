@@ -967,7 +967,7 @@ local InterfaceManager = loadstring(
 )()
 
 local Window = Fluent:CreateWindow({
-	Title       = "ArcX ",
+	Title       = "ArcX",
 	SubTitle    = "| Developer",
 	TabWidth    = 160,
 	Size        = UDim2.fromOffset(580, 460),
