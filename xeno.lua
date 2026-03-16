@@ -157,6 +157,7 @@ local CONSTANTS = {
 			},
 			SkillUnlock = {"Shrine Domain Shard", 1}
 		},
+
 		TrueAizen = {
 			Items = {
 				{"Transcendent Core", 5},
@@ -164,8 +165,10 @@ local CONSTANTS = {
 				{"Divinity Essence", 8},
 				{"Fusion Ring", 15},
 				{"Chrysalis Sigil", 75}
-			}
+			},
+			SkillUnlock = {"Transmutation Shard", 5}
 		},
+
 		GojoV2 = {
 			Items = {
 				{"Infinity Trait", 1},
@@ -173,6 +176,7 @@ local CONSTANTS = {
 			},
 			SkillUnlock = {"Infinity Domain Shard", 1}
 		},
+
 		BlessedMaiden = {
 			Items = {
 				{"Aero Core", 3},
@@ -187,12 +191,46 @@ local CONSTANTS = {
 				{"Tempest Relic", 25}
 			}
 		},
+
 		Aizen = {
 			Items = {
 				{"Hōgyoku Fragment", 1},
 				{"Reiatsu Core", 3},
 				{"Illusion Prism", 6},
 				{"Mirage Pendant", 10}
+			}
+		},
+
+		SaberV2 = {
+			Items = {
+				{"Corrupt Crown", 1},
+				{"Corruption Core", 3},
+				{"Alter Essence", 8},
+				{"Morgan Remnant", 15},
+				{"Dark Grail", 25}
+			},
+			SkillUnlock = {
+				{"Corrupt Crown", 2},
+				{"Corruption Core", 8}
+			}
+		},
+
+		Anos = {
+			Items = {
+				{"Calamity Seal", 65},
+				{"Demonic Fragment", 12},
+				{"Demonic Shard", 6},
+				{"Destruction Eye", 2},
+				{"Imperial Mark", 1}
+			}
+		},
+
+		Yamato = {
+			Items = {
+				{"Azure Heart", 1},
+				{"Silent Storm", 3},
+				{"Yamato Essence", 7},
+				{"Frozen Will", 14}
 			}
 		}
 	}
