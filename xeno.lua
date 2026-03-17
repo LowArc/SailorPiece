@@ -148,39 +148,49 @@ local CONSTANTS = {
 	},
 
 	CraftingSets = {
-		SukunaV2 = {
+		StrongestinHistory = {
 			Items = {
 				{"Malevolent Soul", 3},
 				{"Awakened Cursed Finger", 20},
 				{"Cursed Flesh", 1},
 				{"Vessel Ring", 7}
 			},
-			SkillUnlock = {"Shrine Domain Shard", 1}
+			SkillUnlock = {
+				{"Shrine Domain Shard", 1},
+				{"Malevolent Soul", 3}
+			}
 		},
 
 		TrueAizen = {
 			Items = {
-				{"Transcendent Core", 5},
 				{"Evolution Fragment", 1},
+				{"Transcendent Core", 3},
 				{"Divinity Essence", 8},
 				{"Fusion Ring", 15},
 				{"Chrysalis Sigil", 75}
 			},
-			SkillUnlock = {"Transmutation Shard", 5}
+			SkillUnlock = {
+				{"Transmutation Shard", 5}
+			}
 		},
 
-		GojoV2 = {
+		StrongestofToday = {
 			Items = {
-				{"Infinity Trait", 1},
-				{"Blue Singularity", 3}
+				{"Reversal Pulse", 9},
+				{"Blue Singularity", 3},
+				{"Infinity Essence", 1},
+				{"Six Eye", 6}
 			},
-			SkillUnlock = {"Infinity Domain Shard", 1}
+			SkillUnlock = {
+				{"Blue Singularity", 3},
+				{"Infinity Domain Shard", 1}
+			}
 		},
 
 		BlessedMaiden = {
 			Items = {
-				{"Aero Core", 3},
 				{"Celestial Mark", 1},
+				{"Aero Core", 3},
 				{"Gale Essence", 8},
 				{"Tide Remnant", 14},
 				{"Tempest Relic", 25}
@@ -188,7 +198,7 @@ local CONSTANTS = {
 			SkillUnlock = {
 				{"Celestial Mark", 2},
 				{"Aero Core", 8},
-				{"Tempest Relic", 25}
+				{"Tempest Relic", 75}
 			}
 		},
 
@@ -201,7 +211,7 @@ local CONSTANTS = {
 			}
 		},
 
-		SaberV2 = {
+		SaberAlter = {
 			Items = {
 				{"Corrupt Crown", 1},
 				{"Corruption Core", 3},
@@ -211,7 +221,8 @@ local CONSTANTS = {
 			},
 			SkillUnlock = {
 				{"Corrupt Crown", 2},
-				{"Corruption Core", 8}
+				{"Corruption Core", 9},
+				{"Dark Grail", 85}
 			}
 		},
 
@@ -232,6 +243,28 @@ local CONSTANTS = {
 				{"Yamato Essence", 7},
 				{"Frozen Will", 14}
 			}
+		},
+
+		Gilgamesh = {
+			Items = {
+				{"Throne Remnant", 12},
+				{"Ancient Shard", 6},
+				{"Golden Essence", 3},
+				{"Phantasm Core", 1}
+			}
+		},
+
+		ShadowMonarch = {
+			Items = {
+				{"Monarch Core", 10},
+				{"Monarch Essence", 5},
+				{"Kamish Dagger", 2},
+				{"Shadow Crystal", 1}
+			}
+		},
+
+		Gryphon = {
+			Items = {}
 		}
 	}
 }
@@ -1261,7 +1294,7 @@ Tabs.Crafting:AddParagraph({ Title = "Crafting Calculator", Content = "⚠️ Yo
 local craftingSetKeys = {}
 for k, _ in pairs(CONSTANTS.CraftingSets) do table.insert(craftingSetKeys, k) end
 
-local selectedSet = "SukunaV2"
+local selectedSet = "StrongestinHistory"
 Tabs.Crafting:AddDropdown("Dropdown_CraftingSet", {
 	Title = "Select Set",
 	Values = craftingSetKeys,
