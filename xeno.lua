@@ -1204,20 +1204,56 @@ end
 
 local function CheckSetAmount(setName)
 	local setInfo = CONSTANTS.CraftingSets[setName]
-	if not setInfo or not setInfo.Items then return 0 end
+	if not setInfo then return 0, 0, 0 end
 
-	local reqs = setInfo.Items
-	local maxSets = math.huge
-	for _, req in ipairs(reqs) do
-		local itemName = req[1]
-		local requiredAmt = req[2]
-		local hasAmt = GetItemQuantity(itemName)
-		local canMake = math.floor(hasAmt / requiredAmt)
-		if canMake < maxSets then
-			maxSets = canMake
+	local normalReqs = {}
+	local skillReqs = {}
+	local combinedReqs = {}
+	
+	if setInfo.Items then
+		for _, req in ipairs(setInfo.Items) do
+			local itemName = req[1]
+			local requiredAmt = req[2]
+			normalReqs[itemName] = (normalReqs[itemName] or 0) + requiredAmt
+			combinedReqs[itemName] = (combinedReqs[itemName] or 0) + requiredAmt
 		end
 	end
-	return maxSets == math.huge and 0 or maxSets
+	
+	if setInfo.SkillUnlock then
+		if type(setInfo.SkillUnlock[1]) == "table" then
+			for _, req in ipairs(setInfo.SkillUnlock) do
+				local itemName = req[1]
+				local requiredAmt = req[2]
+				skillReqs[itemName] = (skillReqs[itemName] or 0) + requiredAmt
+				combinedReqs[itemName] = (combinedReqs[itemName] or 0) + requiredAmt
+			end
+		else
+			local itemName = setInfo.SkillUnlock[1]
+			local requiredAmt = setInfo.SkillUnlock[2]
+			skillReqs[itemName] = (skillReqs[itemName] or 0) + requiredAmt
+			combinedReqs[itemName] = (combinedReqs[itemName] or 0) + requiredAmt
+		end
+	end
+
+	local function calcMaxSets(reqsDict)
+		local maxSets = math.huge
+		local hasReqs = false
+		for itemName, requiredAmt in pairs(reqsDict) do
+			hasReqs = true
+			local hasAmt = GetItemQuantity(itemName)
+			local canMake = math.floor(hasAmt / requiredAmt)
+			if canMake < maxSets then
+				maxSets = canMake
+			end
+		end
+		return hasReqs and (maxSets == math.huge and 0 or maxSets) or 0
+	end
+
+	local normalSets = calcMaxSets(normalReqs)
+	local skillSets = calcMaxSets(skillReqs)
+	local combinedSets = calcMaxSets(combinedReqs)
+
+	return normalSets, skillSets, combinedSets
 end
 
 Tabs.Crafting:AddParagraph({ Title = "Crafting Calculator", Content = "⚠️ You must open inventory in items tabs only. And make every materials visible." })
@@ -1246,10 +1282,17 @@ Tabs.Crafting:AddButton({
 		local setInfo = CONSTANTS.CraftingSets[selectedSet]
 		if not setInfo then return end
 
-		local amount = CheckSetAmount(selectedSet)
-		local details = "Can create: " .. amount .. " sets\n"
+		local normalSets, skillSets, combinedSets = CheckSetAmount(selectedSet)
+		local details = ""
+		
+		if setInfo.SkillUnlock then
+			details = "Can create:\n- Normal Sets: " .. normalSets .. "\n- SkillUnlock Sets: " .. skillSets .. "\n- Combined Sets: " .. combinedSets .. "\n"
+		else
+			details = "Can create:\n- Normal Sets: " .. normalSets .. "\n"
+		end
 		
 		if setInfo.Items then
+			details = details .. "\nNormal Items:"
 			for _, req in ipairs(setInfo.Items) do
 				local itemName = req[1]
 				local requiredAmt = req[2]
@@ -1283,9 +1326,14 @@ Tabs.Crafting:AddButton({
 			setAmountParagraph:SetDesc(details)
 		end
 		
+		local notifyText = "Normal: " .. normalSets
+		if setInfo.SkillUnlock then
+			notifyText = notifyText .. " | Combined: " .. combinedSets
+		end
+
 		Fluent:Notify({
 			Title = "Crafting Check",
-			Content = "You can create " .. amount .. " " .. selectedSet .. " sets.",
+			Content = notifyText,
 			Duration = 3,
 		})
 	end
