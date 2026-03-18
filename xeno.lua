@@ -21,6 +21,7 @@ local Config = {
 	RejoinDelay           = 10,
 	FriendOnly            = false,
 	WhiteScreen           = false,
+	FPSLock               = 240,
 	TpTime                = 0.1,
 	NPCAttackThreshold    = 5,
 	AutoEquip             = false,
@@ -1851,6 +1852,19 @@ Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
 		Duration = 3,
 	})
 end)
+
+Tabs.Settings:AddInput("Input_FPSLock", {
+	Title = "Lock FPS",
+	Default = tostring(Config.FPSLock),
+	Numeric = true,
+	Finished = true,
+	Placeholder = "Enter FPS (0 for uncapped)",
+	Callback = function(v)
+		local fps = tonumber(v) or 0
+		Config.FPSLock = fps
+		pcall(function() setfpscap(fps) end)
+	end
+})
 
 Tabs.Settings:AddSection("🔄 Auto Rejoin")
 
