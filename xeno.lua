@@ -1239,8 +1239,8 @@ local InterfaceManager = loadstring(
 )()
 
 local Window = Fluent:CreateWindow({
-	Title       = "ArcX",
-	SubTitle    = "| Developer",
+	Title       = "Sailor Piece ⛵",
+	SubTitle    = "| ArcX",
 	TabWidth    = 160,
 	Size        = UDim2.fromOffset(580, 460),
 	Acrylic     = true,
@@ -1968,7 +1968,7 @@ if not _codeRedeemDone then
 end
 
 Fluent:Notify({
-	Title    = "💀 ArcX Loaded!",
+	Title    = "ArcX Loaded!",
 	Content  = "All systems online. Tabs ready.\nTip: Refresh weapon list before farming!",
 	Duration = 6,
 })
