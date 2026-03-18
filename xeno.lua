@@ -81,6 +81,15 @@ local Config = {
 		SlimeKey = false,
 		DivineGrail = false,
 	},
+	DungeonFarm = {
+		Enabled      = false,
+		TweenSpeed   = 0.1,   -- seconds per tween step
+		FarmPosition = "Top", -- "Top" | "Behind"
+		Distance     = 5,     -- Studs away
+		AutoReplay   = false,
+		AutoVote     = false,
+		VoteDiff     = "Easy",
+	},
 }
 
 _G.FarmConfig = Config
@@ -207,8 +216,7 @@ local CONSTANTS = {
 				{"Hōgyoku Fragment", 1},
 				{"Reiatsu Core", 3},
 				{"Illusion Prism", 6},
-				{"Mirage Pendant", 10},
-				{"Worthiness Fragment", 5},
+				{"Mirage Pendant", 10}
 			}
 		},
 
@@ -573,6 +581,7 @@ function Farmer:Start()
 		while self._running and task.wait(0.1) do
 			local cfg = _G.FarmConfig
 			if not cfg.LoopFarm then continue end
+			if game.PlaceId ~= 77747658251236 then continue end
 
 			self:CheckObservationHaki()
 			self:CheckArmamentHaki()
@@ -678,6 +687,184 @@ function Farmer:Start()
 						task.wait(cfg.TpTime)
 					end
 				end
+			end
+		end
+	end)
+end
+
+-- ==========================================
+-- || CLASS: Dungeon Farmer
+-- ==========================================
+local DungeonFarmer = {}
+DungeonFarmer.__index = DungeonFarmer
+
+function DungeonFarmer.new()
+	return setmetatable({ _running = false }, DungeonFarmer)
+end
+
+function DungeonFarmer:Stop()
+	self._running = false
+end
+
+-- Adds BodyMovers to make the character feel "anchored" in the air without actually anchoring them
+function DungeonFarmer:_stabilize(hrp, goalCF)
+	local bv = hrp:FindFirstChild("DungeonStabilizer_BV")
+	if not bv then
+		bv = Instance.new("BodyVelocity")
+		bv.Name = "DungeonStabilizer_BV"
+		bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+		bv.Parent = hrp
+	end
+	bv.Velocity = Vector3.new(0, 0, 0)
+	
+	local bg = hrp:FindFirstChild("DungeonStabilizer_BG")
+	if not bg then
+		bg = Instance.new("BodyGyro")
+		bg.Name = "DungeonStabilizer_BG"
+		bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+		bg.P = 3000
+		bg.D = 500
+		bg.Parent = hrp
+	end
+	bg.CFrame = goalCF
+end
+
+function DungeonFarmer:_destabilize(hrp)
+	local bv = hrp:FindFirstChild("DungeonStabilizer_BV")
+	if bv then bv:Destroy() end
+	local bg = hrp:FindFirstChild("DungeonStabilizer_BG")
+	if bg then bg:Destroy() end
+end
+
+-- Returns a goal CFrame next to the NPC's HumanoidRootPart
+function DungeonFarmer:_getGoal(npcHRP, position)
+	local pos = npcHRP.Position
+	local cf  = npcHRP.CFrame
+	local dist = _G.FarmConfig.DungeonFarm.Distance or 5
+	
+	if position == "Top" then
+		return CFrame.new(pos + Vector3.new(0, dist, 0), pos)
+	else -- Behind
+		return cf * CFrame.new(0, 2, dist)
+	end
+end
+
+function DungeonFarmer:Start()
+	if self._running then return end
+	self._running = true
+
+	task.spawn(function()
+		while self._running do
+			task.wait(0.05)
+			local cfg = _G.FarmConfig
+			if not cfg.DungeonFarm.Enabled then task.wait(0.5) continue end
+
+			local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+			if playerGui and playerGui:FindFirstChild("DungeonUI") then
+				local dungeonUI = playerGui.DungeonUI
+				
+				if cfg.DungeonFarm.AutoReplay then
+					local replayFrame = dungeonUI:FindFirstChild("ReplayDungeonFrameVisibleOnlyWhenClearingDungeon")
+					if replayFrame and replayFrame.Visible then
+						pcall(function()
+							game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("DungeonWaveReplayVote"):FireServer("sponsor")
+						end)
+						task.wait(1)
+					end
+				end
+				
+				if cfg.DungeonFarm.AutoVote then
+					local contentFrame = dungeonUI:FindFirstChild("ContentFrame")
+					if contentFrame then
+						local actions = contentFrame:FindFirstChild("Actions")
+						if actions then
+							local diffFrame = actions:FindFirstChild(cfg.DungeonFarm.VoteDiff .. "DifficultyFrame")
+							if diffFrame and diffFrame.Visible then
+								pcall(function()
+									game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("DungeonWaveVote"):FireServer(cfg.DungeonFarm.VoteDiff)
+								end)
+								task.wait(1)
+							end
+						end
+					end
+				end
+			end
+
+			local char = LocalPlayer.Character
+			local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+			if not hrp then task.wait(1) continue end
+
+			local npcsFolder = workspace:FindFirstChild("NPCs")
+			if not npcsFolder then task.wait(1) continue end
+
+			local targets = npcsFolder:GetChildren()
+			if #targets == 0 then task.wait(0.5) continue end
+
+			for _, model in ipairs(targets) do
+				if not self._running or not cfg.DungeonFarm.Enabled then break end
+
+				local hum    = model:FindFirstChildOfClass("Humanoid")
+				local npcHRP = model:FindFirstChild("HumanoidRootPart")
+				if not hum or not npcHRP then continue end
+				if hum.Health <= 0 then continue end
+
+				local isBoss = model.Name:find("Boss") ~= nil
+				local speed  = cfg.DungeonFarm.TweenSpeed
+				local pos    = cfg.DungeonFarm.FarmPosition
+
+				if isBoss then
+					-- Stay on boss until it dies
+					while self._running and cfg.DungeonFarm.Enabled do
+						cfg = _G.FarmConfig
+						speed = cfg.DungeonFarm.TweenSpeed
+						pos   = cfg.DungeonFarm.FarmPosition
+
+						if _G.ArcX_Farmer then
+							_G.ArcX_Farmer:CheckObservationHaki()
+							_G.ArcX_Farmer:CheckArmamentHaki()
+							_G.ArcX_Farmer:EquipWeapon(true)
+							_G.ArcX_Farmer:CastSkills(true)
+						end
+
+						local curChar = LocalPlayer.Character
+						local curHrp  = curChar and curChar:FindFirstChild("HumanoidRootPart")
+						if not curHrp then task.wait(1) break end
+
+						local liveHum = model:FindFirstChildOfClass("Humanoid")
+						if not model.Parent or not liveHum or liveHum.Health <= 0 then break end
+
+						local liveHRP = model:FindFirstChild("HumanoidRootPart")
+						if not liveHRP then break end
+
+						local goal = self:_getGoal(liveHRP, pos)
+						self:_stabilize(curHrp, goal)
+						curHrp.CFrame = goal
+						task.wait(speed)
+					end
+				else
+					-- Fast single-pass TP, don't care if it dies
+					local curChar = LocalPlayer.Character
+					local curHrp  = curChar and curChar:FindFirstChild("HumanoidRootPart")
+					if not curHrp then continue end
+					
+					if _G.ArcX_Farmer then
+						_G.ArcX_Farmer:CheckObservationHaki()
+						_G.ArcX_Farmer:CheckArmamentHaki()
+						_G.ArcX_Farmer:EquipWeapon(false)
+						_G.ArcX_Farmer:CastSkills(false)
+					end
+					
+					local goal = self:_getGoal(npcHRP, pos)
+					
+					self:_stabilize(curHrp, goal)
+					curHrp.CFrame = goal
+					task.wait(speed)
+				end
+				
+				-- Destabilize when moving to next target
+				local curChar = LocalPlayer.Character
+				local curHrp  = curChar and curChar:FindFirstChild("HumanoidRootPart")
+				if curHrp then self:_destabilize(curHrp) end
 			end
 		end
 	end)
@@ -970,9 +1157,10 @@ end
 -- ==========================================
 -- || CLEANUP PREVIOUS INSTANCES
 -- ==========================================
-if _G.ArcX_Spawner then _G.ArcX_Spawner:Stop()    end
-if _G.ArcX_Farmer  then _G.ArcX_Farmer:Stop()     end
-if _G.ArcX_Tracker then _G.ArcX_Tracker:Destroy() end
+if _G.ArcX_Spawner       then _G.ArcX_Spawner:Stop()             end
+if _G.ArcX_Farmer        then _G.ArcX_Farmer:Stop()              end
+if _G.ArcX_DungeonFarmer then _G.ArcX_DungeonFarmer:Stop()       end
+if _G.ArcX_Tracker       then _G.ArcX_Tracker:Destroy()          end
 Utility.Cleanup()
 
 if _G.ArcX_Window then
@@ -1011,11 +1199,13 @@ local AutoFarm  = Farmer.new(
 	GameRemotes.ObservationHaki,
 	GameRemotes.Haki
 )
-local AutoQuest = QuestManager.new()
+local AutoQuest     = QuestManager.new()
+local DungeonFarm   = DungeonFarmer.new()
 
-_G.ArcX_Tracker = Tracker
-_G.ArcX_Spawner = Spawner
-_G.ArcX_Farmer  = AutoFarm
+_G.ArcX_Tracker       = Tracker
+_G.ArcX_Spawner       = Spawner
+_G.ArcX_Farmer        = AutoFarm
+_G.ArcX_DungeonFarmer = DungeonFarm
 
 Utility.EnableAntiAFK()
 Utility.EnableAutoRejoin()
@@ -1052,9 +1242,10 @@ _G.ArcX_Window = Window
 
 local Tabs = {
 	Main     = Window:AddTab({ Title = "Main",            Icon = "home"     }),
-	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "swords"   }),
+	Mobs     = Window:AddTab({ Title = "Entities",        Icon = "ghost"    }),
 	Bosses   = Window:AddTab({ Title = "Standard Bosses", Icon = "skull"    }),
 	Specials = Window:AddTab({ Title = "Special Bosses",  Icon = "star"     }),
+	Dungeon  = Window:AddTab({ Title = "Dungeon",         Icon = "swords"   }),
 	Crafting = Window:AddTab({ Title = "Crafting",        Icon = "hammer"   }),
 	Misc     = Window:AddTab({ Title = "Misc",            Icon = "gift"     }),
 	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings" }),
@@ -1062,7 +1253,20 @@ local Tabs = {
 
 -- ── Main Tab ──────────────────────────────────────────────────────────────────
 Tabs.Main:AddToggle("Toggle_LoopFarm", { Title = "Enable Auto Farm", Default = Config.LoopFarm })
-	:OnChanged(function(v) Config.LoopFarm = v end)
+	:OnChanged(function(v) 
+		if v and game.PlaceId ~= 77747658251236 then
+			Fluent:Notify({ Title = "Warning", Content = "Main Auto Farm is only available in Sailor Piece Main Game!", Duration = 4 })
+			task.spawn(function()
+				task.wait()
+				if Fluent.Options.Toggle_LoopFarm then
+					Fluent.Options.Toggle_LoopFarm:SetValue(false)
+				end
+			end)
+			Config.LoopFarm = false
+			return
+		end
+		Config.LoopFarm = v 
+	end)
 
 Tabs.Main:AddSlider("Slider_TpTime", {
 	Title       = "Teleport Delay",
@@ -1201,6 +1405,73 @@ for bossName, bossData in pairs(Config.Specials) do
 		Default = 1,
 	}):OnChanged(function(v) Config.Specials[bossName].Diff = v end)
 end
+
+-- ── Dungeon Tab ───────────────────────────────────────────────────────────────
+Tabs.Dungeon:AddParagraph({
+	Title   = "Dungeon Auto Farm",
+	Content = "Loops through workspace.NPCs. Bosses are attacked until dead; regular NPCs are hit once and skipped.",
+})
+
+Tabs.Dungeon:AddToggle("Toggle_DungeonFarm", {
+	Title   = "Enable Dungeon Auto Farm",
+	Default = Config.DungeonFarm.Enabled,
+}):OnChanged(function(v)
+	Config.DungeonFarm.Enabled = v
+end)
+
+Tabs.Dungeon:AddSlider("Slider_DungeonTweenSpeed", {
+	Title       = "TP Delay",
+	Description = "Seconds between each teleport step (lower = faster).",
+	Default     = Config.DungeonFarm.TweenSpeed,
+	Min         = 0.05,
+	Max         = 2,
+	Rounding    = 2,
+	Callback    = function(v) Config.DungeonFarm.TweenSpeed = v end,
+})
+
+Tabs.Dungeon:AddDropdown("Dropdown_DungeonPosition", {
+	Title   = "Farm Position",
+	Values  = { "Top", "Behind" },
+	Multi   = false,
+	Default = Config.DungeonFarm.FarmPosition,
+}):OnChanged(function(v)
+	Config.DungeonFarm.FarmPosition = v
+end)
+
+Tabs.Dungeon:AddSlider("Slider_DungeonDistance", {
+	Title       = "Farm Distance",
+	Description = "How far from the NPC (in studs).",
+	Default     = Config.DungeonFarm.Distance or 5,
+	Min         = 0,
+	Max         = 20,
+	Rounding    = 1,
+	Callback    = function(v) Config.DungeonFarm.Distance = v end,
+})
+
+Tabs.Dungeon:AddSection("Auto Run")
+
+Tabs.Dungeon:AddToggle("Toggle_DungeonAutoReplay", {
+	Title   = "Auto Replay Dungeon",
+	Default = Config.DungeonFarm.AutoReplay,
+}):OnChanged(function(v)
+	Config.DungeonFarm.AutoReplay = v
+end)
+
+Tabs.Dungeon:AddToggle("Toggle_DungeonAutoVote", {
+	Title   = "Auto Vote Dungeon",
+	Default = Config.DungeonFarm.AutoVote,
+}):OnChanged(function(v)
+	Config.DungeonFarm.AutoVote = v
+end)
+
+Tabs.Dungeon:AddDropdown("Dropdown_DungeonVoteDiff", {
+	Title   = "Vote Difficulty",
+	Values  = { "Easy", "Medium", "Hard", "Extreme" },
+	Multi   = false,
+	Default = Config.DungeonFarm.VoteDiff,
+}):OnChanged(function(v)
+	Config.DungeonFarm.VoteDiff = v
+end)
 
 -- ── Crafting Tab ──────────────────────────────────────────────────────────────
 
@@ -1573,6 +1844,7 @@ Window:SelectTab(1)
 -- Start loops AFTER Fluent is loaded so Fluent.Options is never nil
 Spawner:Start()
 AutoFarm:Start()
+DungeonFarm:Start()
 
 -- ── Auto-redeem on load (once per session) ────────────────────────────────────
 if not _codeRedeemDone then
