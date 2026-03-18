@@ -207,7 +207,8 @@ local CONSTANTS = {
 				{"Hōgyoku Fragment", 1},
 				{"Reiatsu Core", 3},
 				{"Illusion Prism", 6},
-				{"Mirage Pendant", 10}
+				{"Mirage Pendant", 10},
+				{"Worthiness Fragment", 5},
 			}
 		},
 
