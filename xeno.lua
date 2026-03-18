@@ -22,6 +22,7 @@ local Config = {
 	FriendOnly            = false,
 	WhiteScreen           = false,
 	FPSLock               = 240,
+	Webhook               = { Enabled = false, URL = "" },
 	TpTime                = 0.1,
 	NPCAttackThreshold    = 5,
 	AutoEquip             = false,
@@ -1223,6 +1224,33 @@ Utility.SetupCharacterEvents(GameRemotes.Haki, GameRemotes.ObservationHaki)
 
 print("ArcX AutoFarm Initialized Successfully.")
 
+local function SendWebhook(title, description, color)
+	local url = Config.Webhook.URL
+	if not Config.Webhook.Enabled or not url or url == "" then return end
+
+	local data = {
+		content = "",
+		embeds = {{
+			title = title,
+			description = description,
+			color = color or 5814783,
+			footer = { text = "ArcX Notifier | " .. os.date("%X") }
+		}}
+	}
+	
+	local req = (request or http_request or (syn and syn.request))
+	if req then
+		pcall(function()
+			req({
+				Url = url,
+				Method = "POST",
+				Headers = { ["Content-Type"] = "application/json" },
+				Body = game:GetService("HttpService"):JSONEncode(data)
+			})
+		end)
+	end
+end
+
 -- ==========================================
 -- || UI INTEGRATION (FLUENT & SAVEMANAGER)
 -- ==========================================
@@ -1866,6 +1894,34 @@ Tabs.Settings:AddInput("Input_FPSLock", {
 	end
 })
 
+Tabs.Settings:AddSection("📡 Webhook Notifications")
+
+Tabs.Settings:AddToggle("Toggle_Webhook", {
+	Title       = "Enable Webhooks",
+	Default     = Config.Webhook.Enabled,
+}):OnChanged(function(v) Config.Webhook.Enabled = v end)
+
+Tabs.Settings:AddInput("Input_WebhookURL", {
+	Title = "Webhook URL",
+	Default = Config.Webhook.URL,
+	Numeric = false,
+	Finished = true,
+	Placeholder = "Enter Discord Webhook URL",
+	Callback = function(v) Config.Webhook.URL = v end
+})
+
+Tabs.Settings:AddButton({
+	Title = "Test Webhook",
+	Callback = function()
+		if Config.Webhook.Enabled and Config.Webhook.URL ~= "" then
+			SendWebhook("🔔 Test Notification", "This is a test message from ArcX.", 0x5865F2)
+			Fluent:Notify({ Title = "Webhook", Content = "Test payload sent!", Duration = 3 })
+		else
+			Fluent:Notify({ Title = "Webhook", Content = "Please enable webhooks and set a valid URL first.", Duration = 3 })
+		end
+	end
+})
+
 Tabs.Settings:AddSection("🔄 Auto Rejoin")
 
 Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
@@ -1986,3 +2042,13 @@ Fluent:Notify({
 	Content  = "All systems online. Tabs ready.\nTip: Refresh weapon list before farming!",
 	Duration = 6,
 })
+
+if Config.Webhook.Enabled then
+	SendWebhook("🟢 ArcX Started", "Player **" .. LocalPlayer.Name .. "** is now playing Sailor Piece.", 0x00FF00)
+end
+
+game:GetService("GuiService").ErrorMessageChanged:Connect(function(msg)
+	if Config.Webhook.Enabled then
+		SendWebhook("🔴 Disconnected", "Player **" .. LocalPlayer.Name .. "** disconnected.\nReason: " .. tostring(msg), 0xFF0000)
+	end
+end)
