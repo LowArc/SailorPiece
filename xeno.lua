@@ -130,7 +130,7 @@ local CONSTANTS = {
 
 	FarmOrder = {
 		{ Name = "Swordsman",          Remote = "Judgement",   IsBossType = false },
-		{ Name = "Quincy",             Remote = "SoulSociety", IsBossType = false },
+		{ Name = "Quincy",             Remote = "HuecoMundo",  IsBossType = false },
 		{ Name = "AcademyTeacher",     Remote = "Academy",     IsBossType = false },
 		{ Name = "Slime",              Remote = "Slime",       IsBossType = false },
 		{ Name = "StrongSorcerer",     Remote = "Shinjuku",    IsBossType = false },
@@ -143,7 +143,7 @@ local CONSTANTS = {
 		{ Name = "Alucard",            Remote = "Sailor",      IsBossType = true  },
 		{ Name = "Aizen",              Remote = "HuecoMundo",  IsBossType = true  },
 		{ Name = "Yamato",             Remote = "Judgement",   IsBossType = true  },
-		{ Name = "Saber",              Remote = "Boss",        IsBossType = true  },
+		{ Name = "Saber",              Remote = "Boss",        IsBossType = true  }, 	
 		{ Name = "Ichigo",             Remote = "Boss",        IsBossType = true  },
 		{ Name = "QinShi",             Remote = "Boss",        IsBossType = true  },
 		{ Name = "Gilgamesh",          Remote = "Boss",        IsBossType = true  },
@@ -153,7 +153,7 @@ local CONSTANTS = {
 		{ Name = "StrongestofToday",   Remote = "Shinjuku",    IsBossType = true  },
 		{ Name = "Rimuru",             Remote = "Slime",       IsBossType = true  },
 		{ Name = "Anos",               Remote = "Academy",     IsBossType = true  },
-		{ Name = "TrueAizen",          Remote = "SoulSociety", IsBossType = true  },
+		{ Name = "TrueAizen",          Remote = "HuecoMundo",  IsBossType = true  },
 	},
 
 	CraftingSets = {
@@ -580,8 +580,8 @@ function Farmer:Start()
 	task.spawn(function()
 		while self._running and task.wait(0.1) do
 			local cfg = _G.FarmConfig
-			if not cfg.LoopFarm then continue end
-			if game.PlaceId ~= 77747658251236 then continue end
+			if not cfg.LoopFarm then self.CurrentTarget = nil continue end
+			if game.PlaceId ~= 77747658251236 then self.CurrentTarget = nil continue end
 
 			self:CheckObservationHaki()
 			self:CheckArmamentHaki()
@@ -591,6 +591,7 @@ function Farmer:Start()
 			local hrp  = char and char:FindFirstChild("HumanoidRootPart")
 			if not hrp then continue end
 
+			self.CurrentTarget = nil  -- reset so UI shows 🟡 scanning between cycles
 			for _, target in ipairs(CONSTANTS.FarmOrder) do
 				if not self._running or not cfg.LoopFarm then break end
 				if cfg.IgnoredEntities[target.Name] then continue end
@@ -602,12 +603,14 @@ function Farmer:Start()
 
 				local spawnCF = CONSTANTS.Locations[target.Name]
 				if not spawnCF then continue end
+				
+				self.CurrentTarget = target.Name
 
 				-- ── BOSS LOOP ──────────────────────────────────────────────────
 				if target.IsBossType then
 					if target.Remote then
 						self.TpRemote:FireServer(target.Remote)
-						task.wait(0.2)
+						task.wait()
 					end
 
 					while
@@ -654,12 +657,13 @@ function Farmer:Start()
 
 						task.wait(cfg.TpTime)
 					end
+					self.CurrentTarget = nil  -- boss died, back to scanning
 
 				-- ── NPC LOOP ───────────────────────────────────────────────────
 				else
 					if target.Remote then
 						self.TpRemote:FireServer(target.Remote)
-						task.wait(0.2)
+						task.wait()
 					end
 
 					while
@@ -686,6 +690,7 @@ function Farmer:Start()
 
 						task.wait(cfg.TpTime)
 					end
+					self.CurrentTarget = nil  -- npcs cleared, back to scanning
 				end
 			end
 		end
@@ -757,7 +762,7 @@ function DungeonFarmer:Start()
 		while self._running do
 			task.wait(0.05)
 			local cfg = _G.FarmConfig
-			if not cfg.DungeonFarm.Enabled then task.wait(0.5) continue end
+			if not cfg.DungeonFarm.Enabled then self.CurrentTarget = nil task.wait(0.5) continue end
 
 			local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
 			if playerGui and playerGui:FindFirstChild("DungeonUI") then
@@ -807,6 +812,8 @@ function DungeonFarmer:Start()
 				local npcHRP = model:FindFirstChild("HumanoidRootPart")
 				if not hum or not npcHRP then continue end
 				if hum.Health <= 0 then continue end
+				
+				self.CurrentTarget = model.Name
 
 				local isBoss = model.Name:find("Boss") ~= nil
 				local speed  = cfg.DungeonFarm.TweenSpeed
@@ -1218,6 +1225,9 @@ print("ArcX AutoFarm Initialized Successfully.")
 -- ==========================================
 -- || UI INTEGRATION (FLUENT & SAVEMANAGER)
 -- ==========================================
+_G.ArcX_UI_RunID = (_G.ArcX_UI_RunID or 0) + 1
+local currentRunID = _G.ArcX_UI_RunID
+
 local Fluent = loadstring(
 	game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua")
 )()
@@ -1250,104 +1260,135 @@ local Tabs = {
 	Misc     = Window:AddTab({ Title = "Misc",            Icon = "gift"     }),
 	Settings = Window:AddTab({ Title = "Settings",        Icon = "settings" }),
 }
+_G.ArcX_StatusParagraph = Tabs.Main:AddParagraph({
+	Title   = "📊 Live Status",
+	Content = "Initializing..."
+})
 
--- ── Main Tab ──────────────────────────────────────────────────────────────────
-Tabs.Main:AddToggle("Toggle_LoopFarm", { Title = "Enable Auto Farm", Default = Config.LoopFarm })
-	:OnChanged(function(v) 
-		if v and game.PlaceId ~= 77747658251236 then
-			Fluent:Notify({ Title = "Warning", Content = "Main Auto Farm is only available in Sailor Piece Main Game!", Duration = 4 })
-			task.spawn(function()
-				task.wait()
-				if Fluent.Options.Toggle_LoopFarm then
-					Fluent.Options.Toggle_LoopFarm:SetValue(false)
-				end
-			end)
-			Config.LoopFarm = false
-			return
-		end
-		Config.LoopFarm = v 
-	end)
+Tabs.Main:AddSection("🔁 Farm Control")
+
+Tabs.Main:AddToggle("Toggle_LoopFarm", {
+	Title       = "Enable Auto Farm",
+	Default     = Config.LoopFarm,
+}):OnChanged(function(v)
+	if v and game.PlaceId ~= 77747658251236 then
+		Fluent:Notify({
+			Title    = "🚫 Wrong Game",
+			Content  = "Main Auto Farm only runs in Sailor Piece!\nPlease join the main game first.",
+			Duration = 5,
+		})
+		task.spawn(function()
+			task.wait()
+			pcall(function() Fluent.Options.Toggle_LoopFarm:SetValue(false) end)
+		end)
+		Config.LoopFarm = false
+		return
+	end
+	Config.LoopFarm = v
+	Fluent:Notify({
+		Title    = v and "✅ Auto Farm ON" or "⏹️ Auto Farm OFF",
+		Content  = v and "Farming started. Happy grinding!" or "Farming paused.",
+		Duration = 3,
+	})
+end)
 
 Tabs.Main:AddSlider("Slider_TpTime", {
-	Title       = "Teleport Delay",
-	Description = "Wait time between teleports",
+	Title       = "⚡ Teleport Delay",
 	Default     = Config.TpTime,
 	Min = 0, Max = 1, Rounding = 1,
 	Callback = function(v) Config.TpTime = v end,
 })
 
-Tabs.Main:AddToggle("Toggle_AutoHaki", { Title = "Auto Armament Haki", Default = Config.AutoHaki })
-	:OnChanged(function(v) Config.AutoHaki = v end)
+Tabs.Main:AddSection("🥷 Haki Buffs")
 
-Tabs.Main:AddToggle("Toggle_AutoObsHaki", { Title = "Auto Observation Haki", Default = Config.AutoObservationHaki })
-	:OnChanged(function(v) Config.AutoObservationHaki = v end)
+Tabs.Main:AddToggle("Toggle_AutoHaki", {
+	Title       = "Auto Armament Haki",
+	Default     = Config.AutoHaki,
+}):OnChanged(function(v) Config.AutoHaki = v end)
 
-Tabs.Main:AddParagraph({ Title = "Inventory Management", Content = "Pick different weapons for different targets." })
+Tabs.Main:AddToggle("Toggle_AutoObsHaki", {
+	Title       = "Auto Observation Haki",
+	Default     = Config.AutoObservationHaki,
+}):OnChanged(function(v) Config.AutoObservationHaki = v end)
 
-Tabs.Main:AddToggle("Toggle_AutoEquip", { Title = "Auto Equip Weapon", Default = Config.AutoEquip })
-	:OnChanged(function(v) Config.AutoEquip = v end)
+Tabs.Main:AddSection("🗡️ Weapon Management")
+
+Tabs.Main:AddToggle("Toggle_AutoEquip", {
+	Title       = "Auto Equip Weapon",
+	Default     = Config.AutoEquip,
+}):OnChanged(function(v) Config.AutoEquip = v end)
 
 Tabs.Main:AddDropdown("Dropdown_WeaponNPC", {
-	Title   = "Weapon for NPCs",
-	Values  = Utility.GetWeapons(),
-	Multi   = false,
-	Default = Config.SelectedWeapon_NPC,
+	Title       = "NPC Weapon",
+	Values      = Utility.GetWeapons(),
+	Multi       = false,
+	Default     = Config.SelectedWeapon_NPC,
 }):OnChanged(function(v) Config.SelectedWeapon_NPC = v end)
 
 Tabs.Main:AddDropdown("Dropdown_WeaponBoss", {
-	Title   = "Weapon for Bosses",
-	Values  = Utility.GetWeapons(),
-	Multi   = false,
-	Default = Config.SelectedWeapon_Boss,
+	Title       = "Boss Weapon",
+	Values      = Utility.GetWeapons(),
+	Multi       = false,
+	Default     = Config.SelectedWeapon_Boss,
 }):OnChanged(function(v) Config.SelectedWeapon_Boss = v end)
 
 Tabs.Main:AddButton({
-	Title = "Refresh Weapon Lists",
-	Callback = function()
+	Title       = "🔄 Refresh Weapon List",
+	Callback    = function()
 		local weapons = Utility.GetWeapons()
 		Fluent.Options["Dropdown_WeaponNPC"]:SetValues(weapons)
 		Fluent.Options["Dropdown_WeaponBoss"]:SetValues(weapons)
+		Fluent:Notify({ Title = "🔄 Refreshed", Content = "Found " .. #weapons .. " weapon(s) in your backpack.", Duration = 3 })
 	end,
 })
 
-Tabs.Main:AddParagraph({ Title = "Auto Skills", Content = "Automatically cast selected skills during combat." })
+Tabs.Main:AddSection("✨ Auto Skills")
 
-Tabs.Main:AddToggle("Toggle_AutoSkillBoss", { Title = "Use Skills on Bosses", Default = Config.AutoSkill.Bosses })
-	:OnChanged(function(v) Config.AutoSkill.Bosses = v end)
+Tabs.Main:AddToggle("Toggle_AutoSkillBoss", {
+	Title       = "Use Skills on Bosses",
+	Default     = Config.AutoSkill.Bosses,
+}):OnChanged(function(v) Config.AutoSkill.Bosses = v end)
 
 Tabs.Main:AddDropdown("Dropdown_BossSkills", {
-	Title   = "Boss Skills Selection",
-	Values  = { "Z", "X", "C", "V", "F" },
-	Multi   = true,
-	Default = Config.AutoSkill.BossSkills,
+	Title       = "Boss Skill Keys",
+	Values      = { "Z", "X", "C", "V", "F" },
+	Multi       = true,
+	Default     = Config.AutoSkill.BossSkills,
 }):OnChanged(function(v) Config.AutoSkill.BossSkills = v end)
 
-Tabs.Main:AddToggle("Toggle_AutoSkillNPC", { Title = "Use Skills on NPCs", Default = Config.AutoSkill.NPCs })
-	:OnChanged(function(v) Config.AutoSkill.NPCs = v end)
+Tabs.Main:AddToggle("Toggle_AutoSkillNPC", {
+	Title       = "Use Skills on NPCs",
+	Default     = Config.AutoSkill.NPCs,
+}):OnChanged(function(v) Config.AutoSkill.NPCs = v end)
 
 Tabs.Main:AddDropdown("Dropdown_NPCSkills", {
-	Title   = "NPC Skills Selection",
-	Values  = { "Z", "X", "C", "V", "F" },
-	Multi   = true,
-	Default = Config.AutoSkill.NPCSkills,
+	Title       = "NPC Skill Keys",
+	Values      = { "Z", "X", "C", "V", "F" },
+	Multi       = true,
+	Default     = Config.AutoSkill.NPCSkills,
 }):OnChanged(function(v) Config.AutoSkill.NPCSkills = v end)
 
--- ── Mobs / Entities Tab ───────────────────────────────────────────────────────
-Tabs.Mobs:AddParagraph({ Title = "NPC Settings", Content = "Control how many NPCs must spawn before attacking." })
+Tabs.Mobs:AddSection("⚡ Attack Threshold")
 
 Tabs.Mobs:AddSlider("Slider_NPCThreshold", {
-	Title       = "Wait for NPCs",
-	Description = "Script will only attack when this many NPCs are gathered.",
-	Default     = Config.NPCAttackThreshold,
+	Title    = "Min NPC Count",
+	Default  = Config.NPCAttackThreshold,
 	Min = 1, Max = 5, Rounding = 0,
 }):OnChanged(function(v) Config.NPCAttackThreshold = v end)
 
-Tabs.Mobs:AddParagraph({ Title = "Entity Targeting", Content = "Enable the entities you want the script to farm." })
-
 local EntityCategories = {
-	{ Name = "NPCs",          List = { "Hollow", "Quincy", "Swordsman", "AcademyTeacher", "Slime", "StrongSorcerer", "Curse" } },
-	{ Name = "Timed Bosses",  List = { "Gojo", "Yuji", "Sukuna", "Jinwoo", "Alucard", "Aizen", "Yamato" } },
-	{ Name = "Summon Bosses", List = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter", "StrongestinHistory", "StrongestofToday", "Rimuru", "Anos", "TrueAizen" } },
+	{
+		Name = "🐾 Regular NPCs",
+		List = { "Hollow", "Quincy", "Swordsman", "AcademyTeacher", "Slime", "StrongSorcerer", "Curse" },
+	},
+	{
+		Name = "⏱️ Timed Bosses",
+		List = { "Gojo", "Yuji", "Sukuna", "Jinwoo", "Alucard", "Aizen", "Yamato" },
+	},
+	{
+		Name = "💀 Summon Bosses",
+		List = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter", "StrongestinHistory", "StrongestofToday", "Rimuru", "Anos", "TrueAizen" },
+	},
 }
 
 for _, category in ipairs(EntityCategories) do
@@ -1360,25 +1401,22 @@ for _, category in ipairs(EntityCategories) do
 	end
 end
 
--- ── Bosses Tab ────────────────────────────────────────────────────────────────
-Tabs.Bosses:AddParagraph({
-	Title   = "Standard Boss Spawner",
-	Content = "Select one or more bosses. Each selected boss will be spawned independently when not alive.",
-})
+-- ══════════════════════════════════════════════════════════════
+-- 💀  STANDARD BOSSES TAB
+-- ══════════════════════════════════════════════════════════════
+Tabs.Bosses:AddSection("⚙️ Spawn Settings")
 
-Tabs.Bosses:AddToggle("Toggle_AutoSpawn", { Title = "Auto-Spawn Bosses", Default = Config.Boss.AutoSpawn })
-	:OnChanged(function(v) Config.Boss.AutoSpawn = v end)
+Tabs.Bosses:AddToggle("Toggle_AutoSpawn", {
+	Title       = "Auto-Spawn Bosses",
+	Default     = Config.Boss.AutoSpawn,
+}):OnChanged(function(v) Config.Boss.AutoSpawn = v end)
 
--- Multi = true → Fluent fires OnChanged with { BossName = true, ... } (dict, not array)
--- BossSpawner uses pairs() to iterate so this works correctly
 Tabs.Bosses:AddDropdown("Dropdown_SelectedBoss", {
-	Title   = "Select Bosses (Multi)",
+	Title   = "Select Bosses",
 	Values  = { "Saber", "Ichigo", "QinShi", "Gilgamesh", "BlessedMaiden", "SaberAlter" },
 	Multi   = true,
 	Default = {},
-}):OnChanged(function(v)
-	Config.Boss.Selected = v
-end)
+}):OnChanged(function(v) Config.Boss.Selected = v end)
 
 Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
 	Title   = "Difficulty",
@@ -1387,30 +1425,40 @@ Tabs.Bosses:AddDropdown("Dropdown_BossDifficulty", {
 	Default = 1,
 }):OnChanged(function(v) Config.Boss.Difficulty = v end)
 
--- ── Specials Tab ──────────────────────────────────────────────────────────────
-Tabs.Specials:AddParagraph({ Title = "Special Boss Spawners", Content = "Configure auto-spawning for special bosses." })
-
+-- ══════════════════════════════════════════════════════════════
+-- ⭐  SPECIAL BOSSES TAB
+-- ══════════════════════════════════════════════════════════════
 local difficultyLevels = { "Normal", "Medium", "Hard", "Extreme" }
 
-for bossName, bossData in pairs(Config.Specials) do
+local specialOrder = { "TrueAizen", "Sukuna", "Gojo", "Rimuru", "Anos" }
+local specialLabels = {
+	TrueAizen = "👁️ True Aizen",
+	Sukuna    = "🩸 Strongest in History",
+	Gojo      = "✨ Strongest of Today",
+	Rimuru    = "🟦 Rimuru",
+	Anos      = "⚫ Anos",
+}
+
+for _, bossName in ipairs(specialOrder) do
+	local bossData = Config.Specials[bossName]
+	if not bossData then continue end
+	Tabs.Specials:AddSection(specialLabels[bossName] or bossName)
 	Tabs.Specials:AddToggle("Special_" .. bossName, {
-		Title   = "Auto Spawn " .. bossName,
+		Title   = "Auto Spawn",
 		Default = bossData.Auto,
 	}):OnChanged(function(v) Config.Specials[bossName].Auto = v end)
-
 	Tabs.Specials:AddDropdown("SpecialDiff_" .. bossName, {
-		Title   = bossName .. " Difficulty",
+		Title   = "Difficulty",
 		Values  = difficultyLevels,
 		Multi   = false,
 		Default = 1,
 	}):OnChanged(function(v) Config.Specials[bossName].Diff = v end)
 end
 
--- ── Dungeon Tab ───────────────────────────────────────────────────────────────
-Tabs.Dungeon:AddParagraph({
-	Title   = "Dungeon Auto Farm",
-	Content = "Loops through workspace.NPCs. Bosses are attacked until dead; regular NPCs are hit once and skipped.",
-})
+-- ══════════════════════════════════════════════════════════════
+-- 🏰  DUNGEON TAB
+-- ══════════════════════════════════════════════════════════════
+Tabs.Dungeon:AddSection("🎮 Farm Settings")
 
 Tabs.Dungeon:AddToggle("Toggle_DungeonFarm", {
 	Title   = "Enable Dungeon Auto Farm",
@@ -1420,58 +1468,50 @@ Tabs.Dungeon:AddToggle("Toggle_DungeonFarm", {
 end)
 
 Tabs.Dungeon:AddSlider("Slider_DungeonTweenSpeed", {
-	Title       = "TP Delay",
-	Description = "Seconds between each teleport step (lower = faster).",
-	Default     = Config.DungeonFarm.TweenSpeed,
-	Min         = 0.05,
-	Max         = 2,
-	Rounding    = 2,
-	Callback    = function(v) Config.DungeonFarm.TweenSpeed = v end,
+	Title    = "TP Delay",
+	Default  = Config.DungeonFarm.TweenSpeed,
+	Min      = 0.05,
+	Max      = 2,
+	Rounding = 2,
+	Callback = function(v) Config.DungeonFarm.TweenSpeed = v end,
 })
+
+Tabs.Dungeon:AddSection("📍 Position")
 
 Tabs.Dungeon:AddDropdown("Dropdown_DungeonPosition", {
 	Title   = "Farm Position",
 	Values  = { "Top", "Behind" },
 	Multi   = false,
 	Default = Config.DungeonFarm.FarmPosition,
-}):OnChanged(function(v)
-	Config.DungeonFarm.FarmPosition = v
-end)
+}):OnChanged(function(v) Config.DungeonFarm.FarmPosition = v end)
 
 Tabs.Dungeon:AddSlider("Slider_DungeonDistance", {
-	Title       = "Farm Distance",
-	Description = "How far from the NPC (in studs).",
-	Default     = Config.DungeonFarm.Distance or 5,
-	Min         = 0,
-	Max         = 20,
-	Rounding    = 1,
-	Callback    = function(v) Config.DungeonFarm.Distance = v end,
+	Title    = "Distance (studs)",
+	Default  = Config.DungeonFarm.Distance or 5,
+	Min      = 0,
+	Max      = 20,
+	Rounding = 1,
+	Callback = function(v) Config.DungeonFarm.Distance = v end,
 })
 
-Tabs.Dungeon:AddSection("Auto Run")
+Tabs.Dungeon:AddSection("🔁 Auto Run")
 
 Tabs.Dungeon:AddToggle("Toggle_DungeonAutoReplay", {
-	Title   = "Auto Replay Dungeon",
+	Title   = "Auto Replay",
 	Default = Config.DungeonFarm.AutoReplay,
-}):OnChanged(function(v)
-	Config.DungeonFarm.AutoReplay = v
-end)
+}):OnChanged(function(v) Config.DungeonFarm.AutoReplay = v end)
 
 Tabs.Dungeon:AddToggle("Toggle_DungeonAutoVote", {
-	Title   = "Auto Vote Dungeon",
+	Title   = "Auto Vote Difficulty",
 	Default = Config.DungeonFarm.AutoVote,
-}):OnChanged(function(v)
-	Config.DungeonFarm.AutoVote = v
-end)
+}):OnChanged(function(v) Config.DungeonFarm.AutoVote = v end)
 
 Tabs.Dungeon:AddDropdown("Dropdown_DungeonVoteDiff", {
 	Title   = "Vote Difficulty",
 	Values  = { "Easy", "Medium", "Hard", "Extreme" },
 	Multi   = false,
 	Default = Config.DungeonFarm.VoteDiff,
-}):OnChanged(function(v)
-	Config.DungeonFarm.VoteDiff = v
-end)
+}):OnChanged(function(v) Config.DungeonFarm.VoteDiff = v end)
 
 -- ── Crafting Tab ──────────────────────────────────────────────────────────────
 
@@ -1663,7 +1703,7 @@ Tabs.Crafting:AddInput("Input_CraftAmount", {
 })
 
 Tabs.Crafting:AddButton({
-	Title = "Craft SlimeKey",
+	Title       = "🍃 Craft Slime Key",
 	Callback = function()
 		task.spawn(function()
 			local args = { "SlimeKey", craftAmount }
@@ -1671,7 +1711,7 @@ Tabs.Crafting:AddButton({
 				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestSlimeCraft"):InvokeServer(unpack(args))
 			end)
 			if ok then
-				Fluent:Notify({ Title = "Crafting", Content = "Requested " .. craftAmount .. "x SlimeKey.", Duration = 3 })
+				Fluent:Notify({ Title = "🍃 Slime Key", Content = "Crafted " .. craftAmount .. "x Slime Key!", Duration = 3 })
 			else
 				warn("[ArcX] SlimeKey Craft Error:", err)
 			end
@@ -1680,7 +1720,7 @@ Tabs.Crafting:AddButton({
 })
 
 Tabs.Crafting:AddButton({
-	Title = "Craft Divine Grail",
+	Title       = "🏆 Craft Divine Grail",
 	Callback = function()
 		task.spawn(function()
 			local args = { "DivineGrail", craftAmount }
@@ -1688,7 +1728,7 @@ Tabs.Crafting:AddButton({
 				game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("RequestGrailCraft"):InvokeServer(unpack(args))
 			end)
 			if ok then
-				Fluent:Notify({ Title = "Crafting", Content = "Requested " .. craftAmount .. "x Divine Grail.", Duration = 3 })
+				Fluent:Notify({ Title = "🏆 Divine Grail", Content = "Crafted " .. craftAmount .. "x Divine Grail!", Duration = 3 })
 			else
 				warn("[ArcX] Divine Grail Craft Error:", err)
 			end
@@ -1696,24 +1736,25 @@ Tabs.Crafting:AddButton({
 	end
 })
 
-Tabs.Crafting:AddSection("Auto Crafting")
+Tabs.Crafting:AddSection("🤖 Auto Crafting")
 
-Tabs.Crafting:AddToggle("Toggle_AutoCraftSlimeKey", { 
-	Title = "Auto Craft SlimeKey", 
-	Default = Config.AutoCraft.SlimeKey 
-}):OnChanged(function(v) 
-	Config.AutoCraft.SlimeKey = v 
+Tabs.Crafting:AddToggle("Toggle_AutoCraftSlimeKey", {
+	Title       = "Auto Craft Slime Key",
+	Default     = Config.AutoCraft.SlimeKey,
+}):OnChanged(function(v)
+	Config.AutoCraft.SlimeKey = v
 end)
 
-Tabs.Crafting:AddToggle("Toggle_AutoCraftDivineGrail", { 
-	Title = "Auto Craft Divine Grail", 
-	Default = Config.AutoCraft.DivineGrail 
-}):OnChanged(function(v) 
-	Config.AutoCraft.DivineGrail = v 
+Tabs.Crafting:AddToggle("Toggle_AutoCraftDivineGrail", {
+	Title       = "Auto Craft Divine Grail",
+	Default     = Config.AutoCraft.DivineGrail,
+}):OnChanged(function(v)
+	Config.AutoCraft.DivineGrail = v
 end)
 
 task.spawn(function()
 	while task.wait(5) do
+		if _G.ArcX_UI_RunID ~= currentRunID then break end
 		if Config.AutoCraft.SlimeKey then
 			pcall(function()
 				local args = { "SlimeKey", 1 }
@@ -1729,76 +1770,110 @@ task.spawn(function()
 	end
 end)
 
--- ── Misc Tab ──────────────────────────────────────────────────────────────────
-Tabs.Misc:AddSection("Code Redeemer")
+-- ══════════════════════════════════════════════════════════════
+-- 🎁  MISC TAB  —  Codes, Quests, and Utilities
+-- ══════════════════════════════════════════════════════════════
+Tabs.Misc:AddParagraph({
+	Title   = "🛠️ Miscellaneous Tools",
+	Content = "Quick-access utilities: redeem codes, grab quests, and more.",
+})
+
+Tabs.Misc:AddSection("🎟️ Code Redeemer")
 
 Tabs.Misc:AddButton({
-	Title    = "Redeem Active Codes",
-	Callback = function()
+	Title       = "✨ Redeem All Active Codes",
+	Callback    = function()
 		task.spawn(RedeemCodes)
+		Fluent:Notify({ Title = "🎟️ Code Redeemer", Content = "Scanning and redeeming all active codes...", Duration = 3 })
 	end,
 })
 
-Tabs.Misc:AddSection("Get Quest")
+Tabs.Misc:AddSection("📜 Quest Manager")
 
 local questNPCList = QuestManager.GetQuestNPCs()
 
 Tabs.Misc:AddDropdown("Dropdown_QuestNPC", {
-	Title   = "Quest NPC",
-	Values  = questNPCList,
-	Multi   = false,
-	Default = questNPCList[1],
+	Title       = "Quest NPC",
+	Values      = questNPCList,
+	Multi       = false,
+	Default     = questNPCList[1],
 }):OnChanged(function(v)
 	Config.AutoQuest.SelectedNPC = v
 end)
 Config.AutoQuest.SelectedNPC = questNPCList[1]
 
 Tabs.Misc:AddButton({
-	Title    = "Refresh Quest NPC List",
-	Callback = function()
+	Title       = "🔄 Refresh NPC List",
+	Callback    = function()
 		local fresh = QuestManager.GetQuestNPCs()
 		pcall(function() Fluent.Options["Dropdown_QuestNPC"]:SetValues(fresh) end)
 		Fluent:Notify({
-			Title    = "ArcX Quest",
-			Content  = "Found " .. #fresh .. " Quest NPC(s).",
+			Title    = "📜 Quest NPCs",
+			Content  = "Found " .. #fresh .. " Quest NPC(s) in the world.",
 			Duration = 3,
 		})
 	end,
 })
 
 Tabs.Misc:AddButton({
-	Title    = "Get Quest",
-	Callback = function()
+	Title       = "📥 Accept Quest",
+	Callback    = function()
 		task.spawn(function()
 			AutoQuest:AcceptOnce(Config.AutoQuest.SelectedNPC)
 		end)
 	end,
 })
 
--- ── Settings Tab ──────────────────────────────────────────────────────────────
-Tabs.Settings:AddParagraph({ Title = "Script Utilities", Content = "General configurations for ArcX." })
+-- ══════════════════════════════════════════════════════════════
+-- ⚙️  SETTINGS TAB  —  Script configuration and security
+-- ══════════════════════════════════════════════════════════════
+Tabs.Settings:AddParagraph({
+	Title   = "🔧 Script Settings",
+	Content = "Fine-tune ArcX's behavior, performance, and security features.",
+})
+
+_G.ArcX_SessionParagraph = Tabs.Settings:AddParagraph({
+	Title   = "⏱️ Session Uptime",
+	Content = "00:00:00",
+})
+
+Tabs.Settings:AddSection("🖥️ Performance")
 
 Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
-	Title       = "WhiteScreen Mode",
-	Description = "Disables 3D Rendering to save CPU/GPU.",
+	Title       = "WhiteScreen Mode (Perf Boost)",
 	Default     = Config.WhiteScreen,
 }):OnChanged(function(v)
 	Config.WhiteScreen = v
 	game:GetService("RunService"):Set3dRenderingEnabled(not v)
-	if v then
-		Fluent:Notify({ Title = "ArcX Optimization", Content = "WhiteScreen Mode Active.", Duration = 3 })
-	end
+	Fluent:Notify({
+		Title   = v and "🖥️ WhiteScreen ON" or "🖥️ WhiteScreen OFF",
+		Content = v and "Rendering disabled. CPU/GPU usage reduced." or "Rendering re-enabled.",
+		Duration = 3,
+	})
 end)
+
+Tabs.Settings:AddSection("🔄 Auto Rejoin")
 
 Tabs.Settings:AddToggle("Toggle_AutoRejoin", {
 	Title       = "Auto Rejoin on Disconnect",
-	Description = "Automatically rejoins if you get kicked or lose connection.",
 	Default     = Config.AutoRejoin,
 }):OnChanged(function(v) Config.AutoRejoin = v end)
 
+Tabs.Settings:AddToggle("Toggle_TimedRejoin", {
+	Title       = "Timed Auto Rejoin",
+	Default     = Config.TimedRejoin,
+}):OnChanged(function(v) Config.TimedRejoin = v end)
+
+Tabs.Settings:AddSlider("Slider_RejoinDelay", {
+	Title       = "⏱️ Rejoin Interval (minutes)",
+	Default     = Config.RejoinDelay,
+	Min = 1, Max = 120, Rounding = 0,
+}):OnChanged(function(v) Config.RejoinDelay = v end)
+
+Tabs.Settings:AddSection("🛡️ Server Security")
+
 Tabs.Settings:AddToggle("Toggle_FriendOnly", {
-	Title       = "Friend-Only Mode (Anti-Stranger)",
-	Description = "Kicks you from the server if a non-friend is present.",
+	Title       = "Friend-Only Mode",
 	Default     = Config.FriendOnly,
 }):OnChanged(function(v)
 	Config.FriendOnly = v
@@ -1812,23 +1887,9 @@ Tabs.Settings:AddToggle("Toggle_FriendOnly", {
 				end
 			end
 		end
+		Fluent:Notify({ Title = "🛡️ Friend-Only ON", Content = "Server is now locked to friends only.", Duration = 3 })
 	end
 end)
-
-Tabs.Settings:AddSection("Timed Auto Rejoin")
-
-Tabs.Settings:AddToggle("Toggle_TimedRejoin", {
-	Title       = "Timed Auto Rejoin",
-	Description = "Automatically rejoin the server every X minutes.",
-	Default     = Config.TimedRejoin,
-}):OnChanged(function(v) Config.TimedRejoin = v end)
-
-Tabs.Settings:AddSlider("Slider_RejoinDelay", {
-	Title       = "Rejoin Interval (minutes)",
-	Description = "How long to wait before rejoining. Requires Timed Auto Rejoin ON.",
-	Default     = Config.RejoinDelay,
-	Min = 1, Max = 120, Rounding = 0,
-}):OnChanged(function(v) Config.RejoinDelay = v end)
 
 -- ── SaveManager / InterfaceManager ────────────────────────────────────────────
 SaveManager:SetLibrary(Fluent)
@@ -1846,6 +1907,57 @@ Spawner:Start()
 AutoFarm:Start()
 DungeonFarm:Start()
 
+-- ── Live UI Status Updater ────────────────────────────────────────────────────
+task.spawn(function()
+	local startTime = tick()
+
+	while task.wait(0.25) do
+		if _G.ArcX_UI_RunID ~= currentRunID then break end
+
+		-- ── Status line ──────────────────────────────────────────────
+		local p = _G.ArcX_StatusParagraph
+		if p then
+			local cfg    = _G.FarmConfig
+			local dot    = "🔴"
+			local label  = "Idle"
+
+			if cfg.LoopFarm then
+				local tName = _G.ArcX_Farmer and _G.ArcX_Farmer.CurrentTarget
+				if tName then
+					dot   = "🟢"
+					label = "Farming:  " .. tName
+				else
+					dot   = "🟡"
+					label = "Scanning entities..."
+				end
+			elseif cfg.DungeonFarm.Enabled then
+				local tName = _G.ArcX_DungeonFarmer and _G.ArcX_DungeonFarmer.CurrentTarget
+				if tName then
+					dot   = "🟢"
+					label = "Dungeon:  " .. tName
+				else
+					dot   = "🟡"
+					label = "Scanning dungeon..."
+				end
+			end
+
+			pcall(function() p:SetDesc(dot .. "  " .. label) end)
+		end
+
+		-- ── Session uptime ───────────────────────────────────────────
+		local sp = _G.ArcX_SessionParagraph
+		if sp then
+			local uptime = math.floor(tick() - startTime)
+			local h = math.floor(uptime / 3600)
+			local m = math.floor((uptime % 3600) / 60)
+			local s = uptime % 60
+			pcall(function()
+				sp:SetDesc(string.format("Running for: %02d:%02d:%02d", h, m, s))
+			end)
+		end
+	end
+end)
+
 -- ── Auto-redeem on load (once per session) ────────────────────────────────────
 if not _codeRedeemDone then
 	_codeRedeemDone = true
@@ -1856,7 +1968,7 @@ if not _codeRedeemDone then
 end
 
 Fluent:Notify({
-	Title    = "ArcX 💀🥀",
-	Content  = "Script and UI loaded. Don't forget to refresh and select your weapon!",
-	Duration = 5,
+	Title    = "💀 ArcX Loaded!",
+	Content  = "All systems online. Tabs ready.\nTip: Refresh weapon list before farming!",
+	Duration = 6,
 })
