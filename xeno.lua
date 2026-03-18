@@ -1224,9 +1224,12 @@ Utility.SetupCharacterEvents(GameRemotes.Haki, GameRemotes.ObservationHaki)
 
 print("ArcX AutoFarm Initialized Successfully.")
 
+local _lastWebhookTime = 0
 local function SendWebhook(title, description, color)
 	local url = Config.Webhook.URL
 	if not Config.Webhook.Enabled or not url or url == "" then return end
+	if tick() - _lastWebhookTime < 3 then return end
+	_lastWebhookTime = tick()
 
 	local data = {
 		content = "",
