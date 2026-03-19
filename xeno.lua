@@ -21,6 +21,7 @@ local Config = {
 	RejoinDelay           = 10,
 	FriendOnly            = false,
 	WhiteScreen           = false,
+	OptimizeIslands       = false,
 	FPSLock               = 240,
 	Webhook               = { Enabled = false, URL = "" },
 	TpTime                = 0.1,
@@ -561,7 +562,7 @@ function Farmer:CastSkills(isBoss)
 	local shouldCast = isBoss and cfg.AutoSkill.Bosses or (not isBoss and cfg.AutoSkill.NPCs)
 	if not shouldCast then return end
 
-	if tick() - self.LastSkillTime <= 0.3 then return end
+	if tick() - self.LastSkillTime <= 0.05 then return end
 	self.LastSkillTime = tick()
 
 	local activeSkills = isBoss and cfg.AutoSkill.BossSkills or cfg.AutoSkill.NPCSkills
@@ -573,6 +574,41 @@ function Farmer:CastSkills(isBoss)
 			end
 		end
 	end
+end
+
+function Farmer:OptimizeIsland(remoteName, spawnCF)
+	local partName = "OptimizePlatform_" .. remoteName
+	local part = workspace:FindFirstChild(partName)
+	if not part then
+		part = Instance.new("Part")
+		part.Name = partName
+		part.Size = Vector3.new(500, 5, 500)
+		part.Anchored = true
+		part.Transparency = 0.5
+		part.Parent = workspace
+	end
+	part.CFrame = spawnCF * CFrame.new(0, -10, 0)
+	
+	if not _G.FarmConfig.OptimizeIslands then return end
+
+	task.spawn(function()
+		for _ = 1, 10 do
+			local foundAny = false
+			for _, folder in ipairs(workspace:GetChildren()) do
+				if folder:IsA("Folder") and (folder.Name:match("Island") or folder.Name == "HuecoMundo") then
+					local children = folder:GetChildren()
+					if #children > 0 then
+						foundAny = true
+						for _, child in ipairs(children) do
+							child:Destroy()
+						end
+					end
+				end
+			end
+			if not foundAny then break end
+			task.wait(0.5)
+		end
+	end)
 end
 
 function Farmer:Start()
@@ -613,6 +649,7 @@ function Farmer:Start()
 					if target.Remote then
 						self.TpRemote:FireServer(target.Remote)
 						task.wait()
+						self:OptimizeIsland(target.Remote, spawnCF)
 					end
 
 					while
@@ -647,17 +684,15 @@ function Farmer:Start()
 						if distance > 20 then
 							if distance > 150 and target.Remote then
 								self.TpRemote:FireServer(target.Remote)
-								task.wait(0.5)
+								task.wait()
+								self:OptimizeIsland(target.Remote, spawnCF)
 							end
-							curHrp.CFrame = CFrame.lookAt(
-								targetGoal.Position + Vector3.new(0, 0, 3),
-								lookAtPos
-							)
-						else
-							curHrp.CFrame = CFrame.lookAt(curHrp.Position, lookAtPos)
 						end
+						
+						-- Instantly stick to the boss (above and behind) for fast multi-hits
+						curHrp.CFrame = targetGoal * CFrame.new(0, 5, 5)
 
-						task.wait(cfg.TpTime)
+						task.wait()
 					end
 					self.CurrentTarget = nil  -- boss died, back to scanning
 
@@ -666,6 +701,7 @@ function Farmer:Start()
 					if target.Remote then
 						self.TpRemote:FireServer(target.Remote)
 						task.wait()
+						self:OptimizeIsland(target.Remote, spawnCF)
 					end
 
 					while
@@ -678,7 +714,7 @@ function Farmer:Start()
 
 						local curChar = LocalPlayer.Character
 						local curHrp  = curChar and curChar:FindFirstChild("HumanoidRootPart")
-						if not curHrp then task.wait(1) continue end
+						if not curHrp then task.wait(.25) continue end
 
 						self:CheckObservationHaki()
 						self:CheckArmamentHaki()
@@ -687,10 +723,27 @@ function Farmer:Start()
 
 						local distance = (curHrp.Position - spawnCF.Position).Magnitude
 						if distance > 10 then
+							if distance > 150 and target.Remote then
+								self.TpRemote:FireServer(target.Remote)
+								task.wait()
+								self:OptimizeIsland(target.Remote, spawnCF)
+							end
 							curHrp.CFrame = spawnCF
 						end
 
-						task.wait(cfg.TpTime)
+						-- Bring Mobs functionality to quickly group local NPCs
+						for npc in next, self.Tracker.Active do
+							if npc.Name:find(target.Name) then
+								local hrp = npc:FindFirstChild("HumanoidRootPart")
+								local hum = npc:FindFirstChild("Humanoid")
+								if hrp and hum and hum.Health > 0 then
+									hum.WalkSpeed = 0
+									hrp.CFrame = curHrp.CFrame * CFrame.new(0, 0, -5)
+								end
+							end
+						end
+
+						task.wait()
 					end
 					self.CurrentTarget = nil  -- npcs cleared, back to scanning
 				end
@@ -1870,6 +1923,31 @@ _G.ArcX_SessionParagraph = Tabs.Settings:AddParagraph({
 })
 
 Tabs.Settings:AddSection("🖥️ Performance")
+
+Tabs.Settings:AddToggle("Toggle_OptimizeIslands", {
+	Title = "🚀 Auto Optimize Islands",
+	Description = "Continuously clears all loaded island parts from Workspace to drastically reduce lag.",
+	Default = Config.OptimizeIslands,
+}):OnChanged(function(v)
+	Config.OptimizeIslands = v
+	if v then
+		task.spawn(function()
+			while Config.OptimizeIslands do
+				for _, folder in ipairs(workspace:GetChildren()) do
+					if folder:IsA("Folder") and (folder.Name:match("Island") or folder.Name == "HuecoMundo" or folder.Name == "ShibuyaStation") then
+						local children = folder:GetChildren()
+						if #children > 0 then
+							for _, child in ipairs(children) do
+								child:Destroy()
+							end
+						end
+					end
+				end
+				task.wait(1)
+			end
+		end)
+	end
+end)
 
 Tabs.Settings:AddToggle("Toggle_WhiteScreen", {
 	Title       = "WhiteScreen Mode (Perf Boost)",
